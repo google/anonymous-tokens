@@ -12,31 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ANONYMOUS_TOKENS_CPP_CRYPTO_PROTO_UTILS_H_
-#define ANONYMOUS_TOKENS_CPP_CRYPTO_PROTO_UTILS_H_
+#ifndef ANONYMOUS_TOKENS_CPP_CRYPTO_BLIND_SIGNER_H_
+#define ANONYMOUS_TOKENS_CPP_CRYPTO_BLIND_SIGNER_H_
 
+#include <string>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/time.h"
-#include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
 namespace anonymous_tokens {
 
-absl::StatusOr<AnonymousTokensUseCase> ParseUseCase(
-    absl::string_view use_case);
+class BlindSigner {
+ public:
+  virtual absl::StatusOr<std::string> Sign(
+      absl::string_view blinded_data) const = 0;
 
-// Timestamp is defined here:
-// https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#timestamp
-absl::StatusOr<absl::Time> TimeFromProto(
-    const Timestamp& proto);
-
-// Timestamp is defined here:
-// https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#timestamp
-absl::StatusOr<Timestamp> TimeToProto(absl::Time time);
+  virtual ~BlindSigner() = default;
+};
 
 }  // namespace anonymous_tokens
 
 
-#endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_PROTO_UTILS_H_
+#endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_BLIND_SIGNER_H_

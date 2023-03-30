@@ -23,8 +23,8 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
-#include "anonymous_tokens/cpp/crypto/proto_utils.h"
-#include "anonymous_tokens/cpp/crypto/status_utils.h"
+#include "anonymous_tokens/cpp/shared/proto_utils.h"
+#include "anonymous_tokens/cpp/shared/status_utils.h"
 
 
 namespace anonymous_tokens {
@@ -150,6 +150,15 @@ absl::Status ValidityChecksForResponseProcessing(
       return absl::InvalidArgumentError("Expired Public Key was returned");
     }
   }
+  RSAPublicKey rsa_public_key_pb;
+  if (!rsa_public_key_pb.ParseFromString(public_key.serialized_public_key())) {
+    return absl::InvalidArgumentError("Public key is malformed.");
+  }
+  if (rsa_public_key_pb.n().size() !=
+      static_cast<size_t>(public_key.key_size())) {
+    return absl::InvalidArgumentError(
+        "Actual and given Public Key sizes are different.");
+  }
   return absl::OkStatus();
 }
 
@@ -199,17 +208,6 @@ AnonymousTokensPublicKeysGetClient::
        rsa_public_key_get_response.rsa_public_keys()) {
     ANON_TOKENS_RETURN_IF_ERROR(ValidityChecksForResponseProcessing(
         resp_public_key, public_key_request_));
-
-    RSAPublicKey rsa_public_key;
-    if (!rsa_public_key.ParseFromString(
-            resp_public_key.serialized_public_key())) {
-      return absl::InvalidArgumentError("Public key is malformed.");
-    }
-    if (rsa_public_key.n().size() !=
-        static_cast<size_t>(resp_public_key.key_size())) {
-      return absl::InvalidArgumentError(
-          "Actual and given Public Key sizes are different.");
-    }
 
     // Extract use case and key version.
     ANON_TOKENS_ASSIGN_OR_RETURN(AnonymousTokensUseCase use_case,

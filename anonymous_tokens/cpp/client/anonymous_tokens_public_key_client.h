@@ -54,8 +54,8 @@ class AnonymousTokensPublicKeysGetClient {
   // that adhere to the validity time window in the request, will be returned.
   //
   // key_validity_start_time defaults to absl::Now(). key_validity_start_time
-  // indicates that the public key(s) expected in response must have their valid
-  // period start time before or at this time.
+  // indicates that the public key(s) expected in the response must have their
+  // valid period start time before or at this time.
   //
   // key_validity_end_time defaults to null which indicates that only
   // indefinitely valid key(s) must be returned. However if, this time is set,
@@ -66,8 +66,8 @@ class AnonymousTokensPublicKeysGetClient {
       absl::Time key_validity_start_time = absl::Now(),
       absl::optional<absl::Time> key_validity_end_time = absl::nullopt);
 
-  // This method is used to process a RSA BSSA response sent by the public key
-  // server.
+  // This method is used to process the AnonymousTokensPublicKeysGetResponse
+  // sent by the public key server.
   absl::StatusOr<std::vector<RSABlindSignaturePublicKey>>
   ProcessAnonymousTokensRSAPublicKeysGetResponse(
       const AnonymousTokensPublicKeysGetResponse& rsa_public_key_get_response);

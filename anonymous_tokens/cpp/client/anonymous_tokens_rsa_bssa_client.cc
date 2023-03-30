@@ -24,12 +24,10 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/time/time.h"
-#include "anonymous_tokens/cpp/crypto/constants.h"
-#include "anonymous_tokens/cpp/crypto/proto_utils.h"
-#include "anonymous_tokens/cpp/crypto/status_utils.h"
-#include "anonymous_tokens/cpp/crypto/utils.h"
+#include "anonymous_tokens/cpp/crypto/crypto_utils.h"
+#include "anonymous_tokens/cpp/shared/proto_utils.h"
+#include "anonymous_tokens/cpp/shared/status_utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
-#include <openssl/rand.h>
 
 
 namespace anonymous_tokens {
@@ -92,20 +90,6 @@ absl::Status CheckPublicKeyValidity(
     }
   }
   return absl::OkStatus();
-}
-
-absl::StatusOr<std::string> GenerateMask(
-    const RSABlindSignaturePublicKey& public_key) {
-  std::string mask;
-  if (public_key.message_mask_type() == AT_MESSAGE_MASK_CONCAT &&
-      public_key.message_mask_size() >= kRsaMessageMaskSizeInBytes32) {
-    mask = std::string(public_key.message_mask_size(), '\0');
-    RAND_bytes(reinterpret_cast<uint8_t*>(mask.data()), mask.size());
-  } else {
-    return absl::InvalidArgumentError(
-        "Undefined or unsupported message mask type.");
-  }
-  return mask;
 }
 
 }  // namespace
@@ -262,7 +246,7 @@ AnonymousTokensRsaBssaClient::ProcessResponse(
 
 absl::Status AnonymousTokensRsaBssaClient::Verify(
     const RSABlindSignatureToken& /*token*/, absl::string_view /*message*/,
-    std::optional<absl::string_view> /*public_metadata*/) {
+    absl::optional<absl::string_view> /*public_metadata*/) {
   return absl::UnimplementedError("Verify not implemented yet.");
 }
 

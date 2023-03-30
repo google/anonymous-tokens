@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ANONYMOUS_TOKENS_CPP_CRYPTO_UTILS_H_
-#define ANONYMOUS_TOKENS_CPP_CRYPTO_UTILS_H_
+#ifndef ANONYMOUS_TOKENS_CPP_CRYPTO_VERIFIER_H_
+#define ANONYMOUS_TOKENS_CPP_CRYPTO_VERIFIER_H_
 
-#include <string>
-
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 
+class Verifier {
+ public:
+  virtual absl::Status Verify(absl::string_view signature,
+                              absl::string_view message) = 0;
 
-namespace anonymous_tokens {
+  virtual ~Verifier() = default;
+};
 
-// Mask message using protocol at
-// https://datatracker.ietf.org/doc/draft-irtf-cfrg-rsa-blind-signatures/
-std::string MaskMessageConcat(absl::string_view mask,
-                              absl::string_view message);
-
-}  // namespace anonymous_tokens
-
-
-#endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_UTILS_H_
+#endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_VERIFIER_H_

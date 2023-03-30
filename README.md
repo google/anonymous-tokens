@@ -1,5 +1,12 @@
 # Anonymous Tokens (AT)
 
+The implementations follow the two IETF standards drafts:
+
+*   [RSA Blind Signatures](https://datatracker.ietf.org/doc/draft-irtf-cfrg-rsa-blind-signatures/)
+*   [RSA Blind Signatures with Public Metadata](https://datatracker.ietf.org/doc/draft-amjad-cfrg-partially-blind-rsa/)
+
+As the standardization process is in progress, we expect the code in this repo to change over time to conform to modifications in the IETF specifications.
+
 ## Problem Statement
 
 Anonymous Tokens (AT) are a cryptographic protocol that enables propagating trust in a cryptographically secure manner while
@@ -38,7 +45,7 @@ The Private Set Membership library requires the following dependencies:
 In order to run this library, you need to install Bazel, if you don't have
 it already.
 [Follow the instructions for your platform on the Bazel website. Make sure you
- are installing version 4.2.1 or above.]
+ are installing version 4.2.X.]
 (https://docs.bazel.build/versions/master/install.html)
 
 You also need to install Git, if you don't have it already.

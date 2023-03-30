@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ANONYMOUS_TOKENS_CPP_CRYPTO_STATUS_UTILS_H_
-#define ANONYMOUS_TOKENS_CPP_CRYPTO_STATUS_UTILS_H_
+#ifndef ANONYMOUS_TOKENS_CPP_SHARED_STATUS_UTILS_H_
+#define ANONYMOUS_TOKENS_CPP_SHARED_STATUS_UTILS_H_
 
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
@@ -35,7 +35,7 @@ namespace anonymous_tokens {
   if (ABSL_PREDICT_FALSE(!statusor.ok())) {                      \
     return statusor.status();                                    \
   }                                                              \
-  lhs = std::move(statusor.value())
+  lhs = *std::move(statusor)
 
 #define ANON_TOKENS_RETURN_IF_ERROR(expr)                  \
   do {                                                     \
@@ -46,4 +46,4 @@ namespace anonymous_tokens {
 }  // namespace anonymous_tokens
 
 
-#endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_STATUS_UTILS_H_
+#endif  // ANONYMOUS_TOKENS_CPP_SHARED_STATUS_UTILS_H_

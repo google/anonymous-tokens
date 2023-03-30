@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "anonymous_tokens/cpp/crypto/proto_utils.h"
+#include "anonymous_tokens/cpp/shared/proto_utils.h"
 
 
 namespace anonymous_tokens {
