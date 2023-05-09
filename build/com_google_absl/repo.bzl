@@ -22,7 +22,7 @@ def com_google_absl_repo():
     if "com_google_absl" not in native.existing_rules():
         http_archive(
             name = "com_google_absl",
-            sha256 = "dd7db6815204c2a62a2160e32c55e97113b0a0178b2f090d6bab5ce36111db4b",
-            strip_prefix = "abseil-cpp-20210324.0",
-            url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20210324.0.tar.gz",
+            sha256 = "0b8b355781fff489ead0704984244256c145691c5fb9e27d632aaf9914293e74",
+            strip_prefix = "abseil-cpp-b19ec98accca194511616f789c0a448c2b9d40e7",
+            url = "https://github.com/abseil/abseil-cpp/archive/b19ec98accca194511616f789c0a448c2b9d40e7.zip",
         )

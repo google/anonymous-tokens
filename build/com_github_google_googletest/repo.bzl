@@ -22,7 +22,7 @@ def com_github_google_googletest_repo():
     if "com_github_google_googletest" not in native.existing_rules():
         http_archive(
             name = "com_github_google_googletest",
-            sha256 = "d17b1b83a57b3933565a6d0616fe261107326d47de20288d0949ed038e1c342d",
-            strip_prefix = "googletest-703bd9caab50b139428cea1aaff9974ebee5742e",
-            url = "https://github.com/google/googletest/archive/703bd9caab50b139428cea1aaff9974ebee5742e.tar.gz",
+            sha256 = "dbca7a1d9bc8ac3a07dc6f667cbf540e468ec79f5cfebdadb8a57925078a450a",
+            strip_prefix = "googletest-bc860af08783b8113005ca7697da5f5d49a8056f",
+            url = "https://github.com/google/googletest/archive/bc860af08783b8113005ca7697da5f5d49a8056f.zip",
         )

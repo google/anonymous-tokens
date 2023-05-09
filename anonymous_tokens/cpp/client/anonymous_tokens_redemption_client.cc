@@ -54,9 +54,7 @@ AnonymousTokensRedemptionClient::CreateAnonymousTokensRedemptionRequest(
   AnonymousTokensRedemptionRequest request;
   for (const RSABlindSignatureTokenWithInput& token_with_input :
        tokens_with_inputs) {
-    if (token_with_input.input().plaintext_message().empty()) {
-      return absl::InvalidArgumentError("Cannot send an empty input message.");
-    } else if (token_with_input.token().token().empty()) {
+    if (token_with_input.token().token().empty()) {
       return absl::InvalidArgumentError(
           "Cannot send an empty token to redeem.");
     } else if (token_with_input.token().message_mask().empty()) {
@@ -130,8 +128,6 @@ AnonymousTokensRedemptionClient::ProcessAnonymousTokensRedemptionResponse(
           "Key version does not match the requested key version.");
     } else if (redemption_result.serialized_unblinded_token().empty()) {
       return absl::InvalidArgumentError("Token cannot be empty in response.");
-    } else if (redemption_result.plaintext_message().empty()) {
-      return absl::InvalidArgumentError("Message cannot be empty.");
     } else if (redemption_result.message_mask().empty()) {
       return absl::InvalidArgumentError("Message mask cannot be empty.");
     } else if (redemption_result.message_mask().size() <
