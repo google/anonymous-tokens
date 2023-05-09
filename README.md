@@ -44,7 +44,8 @@ The Private Set Membership library requires the following dependencies:
 
 In order to run this library, you need to install Bazel, if you don't have
 it already.
-[Follow the instructions for your platform on the Bazel website. This repo has been successfully built locally using version 6.1.2.]
+[Follow the instructions for your platform on the Bazel website. Make sure you
+ are installing version 6.1.2.]
 (https://docs.bazel.build/versions/master/install.html)
 
 You also need to install Git, if you don't have it already.
