@@ -20,10 +20,10 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 def boringssl_repo():
     if "boringssl" not in native.existing_rules():
-        commit = "b851d362a7a0648062c52de64dddc8a334bf3b96"
+        commit = "44b3df6f03d85c901767250329c571db405122d5"
         http_archive(
             name = "boringssl",
-            sha256 = "dc7026aa23299a0d90e35e8f55fd403f1dfa36a7cace914d706f143f8fd4b859",
+            sha256 = "9567b43de39f66e57b895ee814135adc5ddf7f2c895964269b6b13b388158982",
             strip_prefix = "boringssl-" + commit,
             url = "https://github.com/google/boringssl/archive/%s.tar.gz" % commit,
         )

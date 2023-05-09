@@ -25,13 +25,14 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
+
 namespace anonymous_tokens {
 
 // The RSA SSA (Signature Schemes with Appendix) using PSS (Probabilistic
 // Signature Scheme) encoding is defined at
 // https://tools.ietf.org/html/rfc8017#section-8.1). This implementation uses
 // Boring SSL for the underlying cryptographic operations.
-class RsaBlindSigner : public BlindSigner {
+class  RsaBlindSigner : public BlindSigner {
  public:
   ~RsaBlindSigner() override = default;
   RsaBlindSigner(const RsaBlindSigner&) = delete;
@@ -59,7 +60,7 @@ class RsaBlindSigner : public BlindSigner {
 
   absl::StatusOr<std::string> SignInternal(absl::string_view input) const;
 
-  const std::optional<absl::string_view> public_metadata_;
+  const std::optional<std::string> public_metadata_;
 
   // We only keep these for the case when we use RSA blind signatures with
   // public metadata. Specifically augmented_rsa_e_ and augmented_rsa_d_ is
