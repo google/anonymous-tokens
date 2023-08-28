@@ -25,6 +25,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "anonymous_tokens/cpp/crypto/anonymous_tokens_pb_openssl_converters.h"
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
@@ -37,60 +38,48 @@ namespace anonymous_tokens {
 
 absl::StatusOr<std::unique_ptr<RsaSsaPssVerifier>> RsaSsaPssVerifier::New(
     const int salt_length, const EVP_MD* sig_hash, const EVP_MD* mgf1_hash,
-    const RSAPublicKey& public_key,
+    const RSAPublicKey& public_key, const bool use_rsa_public_exponent,
     std::optional<absl::string_view> public_metadata) {
-  // Convert to OpenSSL RSA which will be used in the code paths for the
-  // standard RSA blind signature scheme.
-  //
-  // Moreover, it will also be passed as an argument to PSS related padding
-  // verification methods irrespective of whether RsaBlinder is being used as a
-  // part of the standard RSA blind signature scheme or the scheme with public
-  // metadata support.
-  ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<RSA> rsa_public_key,
-                               AnonymousTokensRSAPublicKeyToRSA(public_key));
-  ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> rsa_modulus,
-                               StringToBignum(public_key.n()));
-  ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> rsa_e,
-                               StringToBignum(public_key.e()));
+  bssl::UniquePtr<RSA> rsa_public_key;
 
-  bssl::UniquePtr<BIGNUM> augmented_rsa_e = nullptr;
-  // If public metadata is supported, RsaSsaPssVerifier will compute a new
-  // public exponent using the public metadata.
-  //
-  // Empty string is a valid public metadata value.
-  if (public_metadata.has_value()) {
-    ANON_TOKENS_ASSIGN_OR_RETURN(
-        augmented_rsa_e,
-        ComputeFinalExponentUnderPublicMetadata(
-            *rsa_modulus.get(), *rsa_e.get(), *public_metadata));
+  if (!public_metadata.has_value()) {
+    ANON_TOKENS_ASSIGN_OR_RETURN(rsa_public_key,
+                                 AnonymousTokensRSAPublicKeyToRSA(public_key));
   } else {
-    augmented_rsa_e = std::move(rsa_e);
+    // If public metadata is passed, RsaSsaPssVerifier will compute a new public
+    // exponent using the public metadata.
+    //
+    // Empty string is a valid public metadata value.
+    ANON_TOKENS_ASSIGN_OR_RETURN(
+        rsa_public_key, CreatePublicKeyRSAWithPublicMetadata(
+                            public_key.n(), public_key.e(), *public_metadata,
+                            use_rsa_public_exponent));
   }
-  return absl::WrapUnique(
-      new RsaSsaPssVerifier(salt_length, public_metadata, sig_hash, mgf1_hash,
-                            std::move(rsa_public_key), std::move(rsa_modulus),
-                            std::move(augmented_rsa_e)));
+
+  return absl::WrapUnique(new RsaSsaPssVerifier(salt_length, public_metadata,
+                                                sig_hash, mgf1_hash,
+                                                std::move(rsa_public_key)));
 }
 
 RsaSsaPssVerifier::RsaSsaPssVerifier(
     int salt_length, std::optional<absl::string_view> public_metadata,
     const EVP_MD* sig_hash, const EVP_MD* mgf1_hash,
-    bssl::UniquePtr<RSA> rsa_public_key, bssl::UniquePtr<BIGNUM> rsa_modulus,
-    bssl::UniquePtr<BIGNUM> augmented_rsa_e)
+    bssl::UniquePtr<RSA> rsa_public_key)
     : salt_length_(salt_length),
       public_metadata_(public_metadata),
       sig_hash_(sig_hash),
       mgf1_hash_(mgf1_hash),
-      rsa_public_key_(std::move(rsa_public_key)),
-      rsa_modulus_(std::move(rsa_modulus)),
-      augmented_rsa_e_(std::move(augmented_rsa_e)) {}
+      rsa_public_key_(std::move(rsa_public_key)) {}
 
 absl::Status RsaSsaPssVerifier::Verify(absl::string_view unblind_token,
                                        absl::string_view message) {
+  std::string augmented_message(message);
+  if (public_metadata_.has_value()) {
+    augmented_message = EncodeMessagePublicMetadata(message, *public_metadata_);
+  }
   return RsaBlindSignatureVerify(salt_length_, sig_hash_, mgf1_hash_,
-                                 rsa_public_key_.get(), *rsa_modulus_.get(),
-                                 *augmented_rsa_e_.get(), unblind_token,
-                                 message, public_metadata_);
+                                 unblind_token, augmented_message,
+                                 rsa_public_key_.get());
 }
 
 }  // namespace anonymous_tokens

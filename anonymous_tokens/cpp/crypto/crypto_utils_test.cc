@@ -23,7 +23,6 @@
 #include <gtest/gtest.h>
 #include "absl/strings/escaping.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
-#include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/base.h>
 #include <openssl/rsa.h>
 
@@ -32,7 +31,8 @@ namespace anonymous_tokens {
 namespace {
 
 struct IetfNewPublicExponentWithPublicMetadataTestVector {
-  RSAPublicKey public_key;
+  std::string rsa_modulus;
+  std::string e;
   std::string public_metadata;
   std::string new_e;
 };
@@ -159,22 +159,22 @@ TEST(PublicMetadataCryptoUtilsInternalTest, PublicMetadataHashWithHKDF) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> max_value,
                                    NewBigNum());
   ASSERT_TRUE(BN_set_word(max_value.get(), 4294967295));
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto key_pair, GetStrongRsaKeys2048());
+  const auto [public_key, _] = GetStrongTestRsaKeyPair2048();
   std::string input1 = "ro1";
   std::string input2 = "ro2";
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> output1,
-      internal::PublicMetadataHashWithHKDF(input1, key_pair.first.n(),
+      internal::PublicMetadataHashWithHKDF(input1, public_key.n,
                                            1 + input1.size()));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> another_output1,
-      internal::PublicMetadataHashWithHKDF(input1, key_pair.first.n(),
+      internal::PublicMetadataHashWithHKDF(input1, public_key.n,
                                            1 + input1.size()));
   EXPECT_EQ(BN_cmp(output1.get(), another_output1.get()), 0);
 
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> output2,
-      internal::PublicMetadataHashWithHKDF(input2, key_pair.first.n(),
+      internal::PublicMetadataHashWithHKDF(input2, public_key.n,
                                            1 + input2.size()));
   EXPECT_NE(BN_cmp(output1.get(), output2.get()), 0);
 
@@ -183,31 +183,30 @@ TEST(PublicMetadataCryptoUtilsInternalTest, PublicMetadataHashWithHKDF) {
 }
 
 TEST(PublicMetadataCryptoUtilsTest, PublicExponentHashDifferentModulus) {
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto key_pair_1, GetStrongRsaKeys2048());
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto key_pair_2,
-                                   GetAnotherStrongRsaKeys2048());
+  const auto public_key_1 = std::get<0>(GetStrongTestRsaKeyPair2048());
+  const auto public_key_2 = std::get<0>(GetAnotherStrongTestRsaKeyPair2048());
   std::string metadata = "md";
   // Check that same metadata and different modulus result in different
   // hashes.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> rsa_modulus_1,
-                                   StringToBignum(key_pair_1.first.n()));
+                                   StringToBignum(public_key_1.n));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> exp1,
-      PublicMetadataExponent(*rsa_modulus_1.get(), metadata));
+      ComputeExponentWithPublicMetadata(*rsa_modulus_1.get(), metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto rsa_modulus_2,
-                                   StringToBignum(key_pair_2.first.n()));
+                                   StringToBignum(public_key_2.n));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> exp2,
-      PublicMetadataExponent(*rsa_modulus_2.get(), metadata));
+      ComputeExponentWithPublicMetadata(*rsa_modulus_2.get(), metadata));
   EXPECT_NE(BN_cmp(exp1.get(), exp2.get()), 0);
 }
 
 std::vector<IetfNewPublicExponentWithPublicMetadataTestVector>
-GetIetfNewPublicExponentWithPublicMetadataTestVectors() {
+GetIetfNewPublicExponentWithPublicMetadataTestVectors(
+    bool use_rsa_public_exponent) {
   std::vector<IetfNewPublicExponentWithPublicMetadataTestVector> test_vectors;
 
-  RSAPublicKey public_key;
-  public_key.set_n(absl::HexStringToBytes(
+  std::string modulus = absl::HexStringToBytes(
       "d6930820f71fe517bf3259d14d40209b02a5c0d3d61991c731dd7da39f8d69821552e231"
       "8d6c9ad897e603887a476ea3162c1205da9ac96f02edf31df049bd55f142134c17d4382a"
       "0e78e275345f165fbe8e49cdca6cf5c726c599dd39e09e75e0f330a33121e73976e4facb"
@@ -215,60 +214,103 @@ GetIetfNewPublicExponentWithPublicMetadataTestVectors() {
       "5ec7256da3fddd0718b89c365410fce61bc7c99b115fb4c3c318081fa7e1b65a37774e8e"
       "50c96e8ce2b2cc6b3b367982366a2bf9924c4bafdb3ff5e722258ab705c76d43e5f1f121"
       "b984814e98ea2b2b8725cd9bc905c0bc3d75c2a8db70a7153213c39ae371b2b5dc1dafcb"
-      "19d6fae9"));
-  public_key.set_e(absl::HexStringToBytes("010001"));
+      "19d6fae9");
+  std::string e = absl::HexStringToBytes("010001");
 
-  // Test vector 1
-  test_vectors.push_back(
-      {.public_key = public_key,
-       .public_metadata = absl::HexStringToBytes("6d65746164617461"),
-       .new_e = absl::HexStringToBytes(
-           "30584b72f5cb557085106232f051d039e23358feee9204cf30ea567620e90d79e4a"
-           "7a81388b1f390e18ea5240a1d8cc296ce1325128b445c48aa5a3b34fa07c324bf17"
-           "bc7f1b3efebaff81d7e032948f1477493bc183d2f8d94c947c984c6f0757527615b"
-           "f2a2f0ef0db5ad80ce99905beed0440b47fa5cb9a2334fea40ad88e6ef1")});
+  if (use_rsa_public_exponent) {
+    // Test vector 1
+    test_vectors.push_back(
+        {.rsa_modulus = modulus,
+         .e = e,
+         .public_metadata = absl::HexStringToBytes("6d65746164617461"),
+         .new_e = absl::HexStringToBytes(
+             "30584b72f5cb557085106232f051d039e23358feee9204cf30ea567620e90d79e"
+             "4a7a81388b1f390e18ea5240a1d8cc296ce1325128b445c48aa5a3b34fa07c324"
+             "bf17bc7f1b3efebaff81d7e032948f1477493bc183d2f8d94c947c984c6f07575"
+             "27615bf2a2f0ef0db5ad80ce99905beed0440b47fa5cb9a2334fea40ad88e6ef"
+             "1")});
 
-  // Test vector 2
-  test_vectors.push_back(
-      {.public_key = public_key,
-       .public_metadata = "",
-       .new_e = absl::HexStringToBytes(
-           "2ed5a8d2592a11bbeef728bb39018ef5c3cf343507dd77dd156d5eec7f06f04732e"
-           "4be944c5d2443d244c59e52c9fa5e8de40f55ffd0e70fbe9093d3f7be2aafd77c14"
-           "b263b71c1c6b3ca2b9629842a902128fee4878392a950906fae35d6194e0d2548e5"
-           "8bbc20f841188ca2fceb20b2b1b45448da5c7d1c73fb6e83fa58867397b")});
+    // Test vector 2
+    test_vectors.push_back(
+        {.rsa_modulus = modulus,
+         .e = e,
+         .public_metadata = "",
+         .new_e = absl::HexStringToBytes(
+             "2ed5a8d2592a11bbeef728bb39018ef5c3cf343507dd77dd156d5eec7f06f0473"
+             "2e4be944c5d2443d244c59e52c9fa5e8de40f55ffd0e70fbe9093d3f7be2aafd7"
+             "7c14b263b71c1c6b3ca2b9629842a902128fee4878392a950906fae35d6194e0d"
+             "2548e58bbc20f841188ca2fceb20b2b1b45448da5c7d1c73fb6e83fa58867397"
+             "b")});
+  } else {
+    // Test vector 1
+    test_vectors.push_back(
+        {.rsa_modulus = modulus,
+         .e = e,
+         .public_metadata = absl::HexStringToBytes("6d65746164617461"),
+         .new_e = absl::HexStringToBytes(
+             "30581b1adab07ac00a5057e2986f37caaa68ae963ffbc4d36c16ea5f3689d6f00"
+             "db79a5bee56053adc53c8d0414d4b754b58c7cc4abef99d4f0d0b2e29cbddf746"
+             "c7d0f4ae2690d82a2757b088820c0d086a40d180b2524687060d768ad5e431732"
+             "102f4bc3572d97e01dcd6301368f255faae4606399f91fa913a6d699d6ef1")});
 
+    // Test vector 2
+    test_vectors.push_back(
+        {.rsa_modulus = modulus,
+         .e = e,
+         .public_metadata = "",
+         .new_e = absl::HexStringToBytes(
+             "2ed579fcdf2d328ebc686c52ccaec247018832acd530a2ac72c0ec2b92db5d6bd"
+             "578e91b6341c1021142b45b9e6e5bf031f3dd62226ec4a0f9ef99e45dd9ccd60a"
+             "a60a0c59aac271a8caf9ee68a9d9ff281367dae09d588d3c7bca7f18de48b6981"
+             "bbc729c4925c65e4b2a7f054facbb7e5fc6e4c6c10110c62ef0b94eec397b")});
+  }
   return test_vectors;
 }
 
 TEST(PublicMetadataCryptoUtilsTest,
      IetfNewPublicExponentWithPublicMetadataTests) {
   const auto test_vectors =
-      GetIetfNewPublicExponentWithPublicMetadataTestVectors();
+      GetIetfNewPublicExponentWithPublicMetadataTestVectors(
+          /*use_rsa_public_exponent=*/true);
   for (const IetfNewPublicExponentWithPublicMetadataTestVector& test_vector :
        test_vectors) {
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-        bssl::UniquePtr<BIGNUM> rsa_modulus,
-        StringToBignum(test_vector.public_key.n()));
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-        bssl::UniquePtr<BIGNUM> rsa_e,
-        StringToBignum(test_vector.public_key.e()));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> rsa_modulus,
+                                     StringToBignum(test_vector.rsa_modulus));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> rsa_e,
+                                     StringToBignum(test_vector.e));
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> expected_new_e,
                                      StringToBignum(test_vector.new_e));
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
         bssl::UniquePtr<BIGNUM> modified_e,
-        ComputeFinalExponentUnderPublicMetadata(
+        ComputeExponentWithPublicMetadataAndPublicExponent(
             *rsa_modulus.get(), *rsa_e.get(), test_vector.public_metadata));
 
     EXPECT_EQ(BN_cmp(modified_e.get(), expected_new_e.get()), 0);
   }
 }
 
-TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
-  RSAPublicKey public_key_e_not_padded;
-  RSAPublicKey public_key_e_padded;
+TEST(PublicMetadataCryptoUtilsTest,
+     IetfNewPublicExponentWithPublicMetadataNoPublicExponentTests) {
+  const auto test_vectors =
+      GetIetfNewPublicExponentWithPublicMetadataTestVectors(
+          /*use_rsa_public_exponent=*/false);
+  for (const IetfNewPublicExponentWithPublicMetadataTestVector& test_vector :
+       test_vectors) {
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> rsa_modulus,
+                                     StringToBignum(test_vector.rsa_modulus));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> expected_new_e,
+                                     StringToBignum(test_vector.new_e));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+        bssl::UniquePtr<BIGNUM> modified_e,
+        ComputeExponentWithPublicMetadata(*rsa_modulus.get(),
+                                          test_vector.public_metadata));
 
-  public_key_e_not_padded.set_n(absl::HexStringToBytes(
+    EXPECT_EQ(BN_cmp(modified_e.get(), expected_new_e.get()), 0);
+  }
+}
+
+TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
+  std::string rsa_modulus = absl::HexStringToBytes(
       "b259758bb02bc75b68b17612c9bf68c5fa05958a334c61e167bc20bcc75757c126e892"
       "10b9df3989072cf6260e6883c7cd4af4d31dde9915b69b301fbef962de8c71bd2db5ec62"
       "5da259712f86a8dc3d241e9688c82391b7bf1ebc358311f55c26be910b76f61fea408ed6"
@@ -276,21 +318,18 @@ TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
       "74d562d32cce7b7edd7cf0149ca0e96cb6525e81fbba815a8f12748e34e5135f572b2e17"
       "b7ba430081597e6fb9033c005884d5935118c60d75b010f6fece7ecdcc1cb7d58d138969"
       "3d43377f4f3de949cb1e4105e792b96d7f04b0cd262ac33cffc5a890d267425e61c19e93"
-      "63550f2285"));
+      "63550f2285");
   // A hex string of 3 bytes in length is passed.
-  public_key_e_not_padded.set_e(absl::HexStringToBytes("010001"));
-
-  public_key_e_padded.set_n(public_key_e_not_padded.n());
+  std::string e_not_padded = absl::HexStringToBytes("010001");
   // A hex string of 4 bytes in length is passed.
-  public_key_e_padded.set_e(absl::HexStringToBytes("00010001"));
+  std::string e_padded = absl::HexStringToBytes("00010001");
 
   // Convert both padded and not padded rsa public keys to rsa structs.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<RSA> rsa_e_not_padded,
-      AnonymousTokensRSAPublicKeyToRSA(public_key_e_not_padded));
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-      bssl::UniquePtr<RSA> rsa_e_padded,
-      AnonymousTokensRSAPublicKeyToRSA(public_key_e_padded));
+      CreatePublicKeyRSA(rsa_modulus, e_not_padded));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa_e_padded,
+                                   CreatePublicKeyRSA(rsa_modulus, e_padded));
   // Encode both padded and not padded rsa structs to DER.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::string result_e_not_padded,
@@ -318,8 +357,7 @@ TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
 // The public key used in this test is taken from the test vectors found here:
 // https://www.ietf.org/archive/id/draft-ietf-privacypass-protocol-10.html#name-issuance-protocol-2-blind-rs
 TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
-  RSAPublicKey public_key;
-  public_key.set_n(absl::HexStringToBytes(
+  std::string rsa_modulus = absl::HexStringToBytes(
       "cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab43c0df3a8c12993af1"
       "2b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a224d6b02f09e5c374d0"
       "cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5e794fc98a313927687"
@@ -327,10 +365,10 @@ TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
       "32db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbcd78a337d17b1dba9e8"
       "28bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2073fe49740c01f00e1"
       "09106066983d21e5f83f086e2e823c879cd43cef700d2a352a9babd612d03cad02db134b"
-      "7e225a5f"));
-  public_key.set_e(absl::HexStringToBytes("010001"));
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-      bssl::UniquePtr<RSA> rsa, AnonymousTokensRSAPublicKeyToRSA(public_key));
+      "7e225a5f");
+  std::string e = absl::HexStringToBytes("010001");
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa,
+                                   CreatePublicKeyRSA(rsa_modulus, e));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string result,
                                    RsaSsaPssPublicKeyToDerEncoding(rsa.get()));
 
@@ -349,37 +387,36 @@ TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
   EXPECT_EQ(result, expected_der_encoding);
 }
 
-using CreateTestKeyPairFunction =
-    absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>();
+using CreateTestKeyPairFunction = std::pair<
+    anonymous_tokens::TestRsaPublicKey, anonymous_tokens::TestRsaPrivateKey>();
 
 class CryptoUtilsTest
     : public testing::TestWithParam<CreateTestKeyPairFunction*> {
  protected:
   void SetUp() override {
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, (*GetParam())());
-    public_key_ = std::move(keys_pair.first);
+    const auto [_, private_key] = (*GetParam())();
+    private_key_ = private_key;
+
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_modulus_,
-                                     StringToBignum(keys_pair.second.n()));
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_e_,
-                                     StringToBignum(keys_pair.second.e()));
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_p_,
-                                     StringToBignum(keys_pair.second.p()));
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_q_,
-                                     StringToBignum(keys_pair.second.q()));
+                                     StringToBignum(private_key_.n));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_e_, StringToBignum(private_key_.e));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_p_, StringToBignum(private_key_.p));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(rsa_q_, StringToBignum(private_key_.q));
   }
+
+  TestRsaPrivateKey private_key_;
 
   bssl::UniquePtr<BIGNUM> rsa_modulus_;
   bssl::UniquePtr<BIGNUM> rsa_e_;
   bssl::UniquePtr<BIGNUM> rsa_p_;
   bssl::UniquePtr<BIGNUM> rsa_q_;
-  RSAPublicKey public_key_;
 };
 
 TEST_P(CryptoUtilsTest, PublicExponentCoprime) {
   std::string metadata = "md";
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> exp,
-      PublicMetadataExponent(*rsa_modulus_.get(), metadata));
+      ComputeExponentWithPublicMetadata(*rsa_modulus_.get(), metadata));
   int rsa_mod_size_bits = BN_num_bits(rsa_modulus_.get());
   // Check that exponent is odd.
   EXPECT_EQ(BN_is_odd(exp.get()), 1);
@@ -397,15 +434,15 @@ TEST_P(CryptoUtilsTest, PublicExponentHash) {
   // Check that hash is deterministic.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> exp1,
-      PublicMetadataExponent(*rsa_modulus_.get(), metadata1));
+      ComputeExponentWithPublicMetadata(*rsa_modulus_.get(), metadata1));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> another_exp1,
-      PublicMetadataExponent(*rsa_modulus_.get(), metadata1));
+      ComputeExponentWithPublicMetadata(*rsa_modulus_.get(), metadata1));
   EXPECT_EQ(BN_cmp(exp1.get(), another_exp1.get()), 0);
   // Check that hashes are distinct for different metadata.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> exp2,
-      PublicMetadataExponent(*rsa_modulus_.get(), metadata2));
+      ComputeExponentWithPublicMetadata(*rsa_modulus_.get(), metadata2));
   EXPECT_NE(BN_cmp(exp1.get(), exp2.get()), 0);
 }
 
@@ -413,8 +450,8 @@ TEST_P(CryptoUtilsTest, FinalExponentCoprime) {
   std::string metadata = "md";
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> final_exponent,
-      ComputeFinalExponentUnderPublicMetadata(*rsa_modulus_.get(),
-                                              *rsa_e_.get(), metadata));
+      ComputeExponentWithPublicMetadataAndPublicExponent(
+          *rsa_modulus_.get(), *rsa_e_.get(), metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetAndStartBigNumCtx());
 
   // Check that exponent is odd.
@@ -436,12 +473,12 @@ TEST_P(CryptoUtilsTest, DeterministicModificationOfPublicExponentWithMetadata) {
   std::string metadata = "md";
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> public_exp_1,
-      ComputeFinalExponentUnderPublicMetadata(*rsa_modulus_.get(),
-                                              *rsa_e_.get(), metadata));
+      ComputeExponentWithPublicMetadataAndPublicExponent(
+          *rsa_modulus_.get(), *rsa_e_.get(), metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> public_exp_2,
-      ComputeFinalExponentUnderPublicMetadata(*rsa_modulus_.get(),
-                                              *rsa_e_.get(), metadata));
+      ComputeExponentWithPublicMetadataAndPublicExponent(
+          *rsa_modulus_.get(), *rsa_e_.get(), metadata));
 
   EXPECT_EQ(BN_cmp(public_exp_1.get(), public_exp_2.get()), 0);
 }
@@ -451,12 +488,12 @@ TEST_P(CryptoUtilsTest, DifferentPublicExponentWithDifferentPublicMetadata) {
   std::string metadata_2 = "md2";
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> public_exp_1,
-      ComputeFinalExponentUnderPublicMetadata(*rsa_modulus_.get(),
-                                              *rsa_e_.get(), metadata_1));
+      ComputeExponentWithPublicMetadataAndPublicExponent(
+          *rsa_modulus_.get(), *rsa_e_.get(), metadata_1));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> public_exp_2,
-      ComputeFinalExponentUnderPublicMetadata(*rsa_modulus_.get(),
-                                              *rsa_e_.get(), metadata_2));
+      ComputeExponentWithPublicMetadataAndPublicExponent(
+          *rsa_modulus_.get(), *rsa_e_.get(), metadata_2));
   // Check that exponent is different in all keys
   EXPECT_NE(BN_cmp(public_exp_1.get(), public_exp_2.get()), 0);
   EXPECT_NE(BN_cmp(public_exp_1.get(), rsa_e_.get()), 0);
@@ -464,18 +501,42 @@ TEST_P(CryptoUtilsTest, DifferentPublicExponentWithDifferentPublicMetadata) {
 }
 
 TEST_P(CryptoUtilsTest, ModifiedPublicExponentWithEmptyPublicMetadata) {
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> new_public_exp,
-                                   ComputeFinalExponentUnderPublicMetadata(
-                                       *rsa_modulus_.get(), *rsa_e_.get(), ""));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      bssl::UniquePtr<BIGNUM> new_public_exp,
+      ComputeExponentWithPublicMetadataAndPublicExponent(*rsa_modulus_.get(),
+                                                         *rsa_e_.get(), ""));
 
   EXPECT_NE(BN_cmp(new_public_exp.get(), rsa_e_.get()), 0);
 }
 
+TEST_P(CryptoUtilsTest, CreateRsaPublicKeyWithPublicMetadataSuccessfully) {
+  std::string metadata = "md";
+  // Key derived using the public exponent, modulus and public metadata.
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa_public_key,
+                                   CreatePublicKeyRSAWithPublicMetadata(
+                                       private_key_.n, private_key_.e, metadata,
+                                       /*use_rsa_public_exponent=*/true));
+  // Key derived using only the modulus and public metadata.
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa_public_key_2,
+                                   CreatePublicKeyRSAWithPublicMetadata(
+                                       private_key_.n, private_key_.e, metadata,
+                                       /*use_rsa_public_exponent=*/false));
+
+  EXPECT_EQ(BN_cmp(RSA_get0_n(rsa_public_key.get()), rsa_modulus_.get()), 0);
+  EXPECT_EQ(BN_cmp(RSA_get0_n(rsa_public_key_2.get()), rsa_modulus_.get()), 0);
+
+  EXPECT_NE(BN_cmp(RSA_get0_e(rsa_public_key.get()), rsa_e_.get()), 0);
+  EXPECT_NE(BN_cmp(RSA_get0_e(rsa_public_key_2.get()), rsa_e_.get()), 0);
+  EXPECT_NE(BN_cmp(RSA_get0_e(rsa_public_key.get()),
+                   RSA_get0_e(rsa_public_key_2.get())),
+            0);
+}
+
 INSTANTIATE_TEST_SUITE_P(CryptoUtilsTest, CryptoUtilsTest,
-                         testing::Values(&GetStrongRsaKeys2048,
-                                         &GetAnotherStrongRsaKeys2048,
-                                         &GetStrongRsaKeys3072,
-                                         &GetStrongRsaKeys4096));
+                         testing::Values(&GetStrongTestRsaKeyPair2048,
+                                         &GetAnotherStrongTestRsaKeyPair2048,
+                                         &GetStrongTestRsaKeyPair3072,
+                                         &GetStrongTestRsaKeyPair4096));
 
 }  // namespace
 }  // namespace anonymous_tokens

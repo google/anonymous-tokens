@@ -38,6 +38,7 @@ cc_library(
     srcs = ["anonymous_tokens_rsa_bssa_client.cc"],
     hdrs = ["anonymous_tokens_rsa_bssa_client.h"],
     deps = [
+        "//anonymous_tokens/cpp/crypto:anonymous_tokens_pb_openssl_converters",
         "//anonymous_tokens/cpp/crypto:crypto_utils",
         "//anonymous_tokens/cpp/crypto:rsa_blinder",
         "//anonymous_tokens/cpp/shared:proto_utils",
@@ -62,10 +63,13 @@ cc_test(
         "//anonymous_tokens/cpp/crypto:rsa_blind_signer",
         "//anonymous_tokens/cpp/shared:proto_utils",
         "//anonymous_tokens/cpp/shared:status_utils",
+        "//anonymous_tokens/cpp/testing:proto_utils",
         "//anonymous_tokens/cpp/testing:utils",
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
         "@com_github_google_googletest//:gtest_main",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
     ],
 )

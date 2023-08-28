@@ -26,7 +26,6 @@
 #include "absl/strings/string_view.h"
 #include "anonymous_tokens/cpp/crypto/blinder.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
-#include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
 
@@ -39,8 +38,17 @@ class  RsaBlinder : public Blinder {
   // Passing of public_metadata is optional. If it is set to any value including
   // an empty string, RsaBlinder will assume that partially blind RSA signature
   // protocol is being executed.
+  //
+  // If public metadata is passed and the boolean "use_rsa_public_exponent" is
+  // set to false, the rsa_public_exponent is not used in any computations in
+  // the protocol.
+  //
+  // Setting "use_rsa_public_exponent" to true is deprecated. All new users
+  // should set it to false.
   static absl::StatusOr<std::unique_ptr<RsaBlinder>> New(
-      const RSABlindSignaturePublicKey& public_key,
+      absl::string_view rsa_modulus, absl::string_view rsa_public_exponent,
+      const EVP_MD* signature_hash_function, const EVP_MD* mgf1_hash_function,
+      int salt_length, bool use_rsa_public_exponent,
       std::optional<absl::string_view> public_metadata = std::nullopt);
 
   // Blind `message` using n and e derived from an RSA public key and the public
@@ -51,19 +59,21 @@ class  RsaBlinder : public Blinder {
   absl::StatusOr<std::string> Blind(absl::string_view message) override;
 
   // Unblinds `blind_signature`.
+  //
+  // Callers should run Verify on the returned signature before using it /
+  // passing it on.
   absl::StatusOr<std::string> Unblind(
       absl::string_view blind_signature) override;
 
-  // Verifies an `unblinded` signature against the input message.
+  // Verifies an `unblinded` signature against the same `message' that was
+  // passed to Blind.
   absl::Status Verify(absl::string_view signature, absl::string_view message);
 
  private:
   // Use `New` to construct
   RsaBlinder(int salt_length, std::optional<absl::string_view> public_metadata,
              const EVP_MD* sig_hash, const EVP_MD* mgf1_hash,
-             bssl::UniquePtr<RSA> rsa_public_key,
-             bssl::UniquePtr<BIGNUM> rsa_modulus,
-             bssl::UniquePtr<BIGNUM> augmented_rsa_e, bssl::UniquePtr<BIGNUM> r,
+             bssl::UniquePtr<RSA> rsa_public_key, bssl::UniquePtr<BIGNUM> r,
              bssl::UniquePtr<BIGNUM> r_inv_mont,
              bssl::UniquePtr<BN_MONT_CTX> mont_n);
 
@@ -72,12 +82,9 @@ class  RsaBlinder : public Blinder {
   const EVP_MD* sig_hash_;   // Owned by BoringSSL.
   const EVP_MD* mgf1_hash_;  // Owned by BoringSSL.
 
+  // If public metadata was passed to RsaBlinder::New, rsa_public_key_ will
+  // will be initialized using RSA_new_public_key_large_e method.
   const bssl::UniquePtr<RSA> rsa_public_key_;
-  // Storing RSA modulus separately for helping with BN computations.
-  const bssl::UniquePtr<BIGNUM> rsa_modulus_;
-  // If public metadata is not supported, augmented_rsa_e_ will be equal to
-  // public exponent e in rsa_public_key_.
-  const bssl::UniquePtr<BIGNUM> augmented_rsa_e_;
 
   const bssl::UniquePtr<BIGNUM> r_;
   // r^-1 mod n in the Montgomery domain
