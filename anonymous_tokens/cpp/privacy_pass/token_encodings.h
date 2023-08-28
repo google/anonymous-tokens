@@ -23,7 +23,6 @@
 
 
 
-
 namespace anonymous_tokens {
 
 // TokenRequest contains the blinded_token_request along with the token type
