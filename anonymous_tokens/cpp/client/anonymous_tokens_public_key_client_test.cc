@@ -373,7 +373,8 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
               testing::HasSubstr("Key_size cannot be less than 256 bytes."));
 }
 
-TEST_F(AnonymousTokensPublicKeysGetClientTest, UndefinedMessageMaskType) {
+TEST_F(AnonymousTokensPublicKeysGetClientTest,
+       UndefinedOrUnsupportedMessageMaskType) {
   ASSERT_TRUE(
       client_
           ->CreateAnonymousTokensPublicKeysGetRequest(
@@ -388,11 +389,24 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest, UndefinedMessageMaskType) {
   absl::StatusOr<std::vector<RSABlindSignaturePublicKey>> public_keys =
       client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(response);
   EXPECT_EQ(public_keys.status().code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_THAT(public_keys.status().message(),
-              testing::HasSubstr("Message mask type must be defined."));
+  EXPECT_THAT(
+      public_keys.status().message(),
+      testing::HasSubstr("Message mask type must be defined and supported."));
+
+  // Unsupported message mask type is invalid.
+  response.mutable_rsa_public_keys(0)->set_message_mask_type(
+      AT_MESSAGE_MASK_XOR);
+
+  public_keys =
+      client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(response);
+  EXPECT_EQ(public_keys.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(
+      public_keys.status().message(),
+      testing::HasSubstr("Message mask type must be defined and supported."));
 }
 
-TEST_F(AnonymousTokensPublicKeysGetClientTest, MessageMaskSizeLessThan32) {
+TEST_F(AnonymousTokensPublicKeysGetClientTest,
+       MessageMaskConcatSizeLessThan32) {
   ASSERT_TRUE(
       client_
           ->CreateAnonymousTokensPublicKeysGetRequest(
@@ -400,14 +414,37 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest, MessageMaskSizeLessThan32) {
           .ok());
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto response, SimpleGetResponse());
 
-  // Undefined message mask type is invalid.
+  // Message mask must be at least 32 bytes.
+  response.mutable_rsa_public_keys(0)->set_message_mask_size(10);
+
+  absl::StatusOr<std::vector<RSABlindSignaturePublicKey>> public_keys =
+      client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(response);
+  EXPECT_EQ(public_keys.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(
+      public_keys.status().message(),
+      testing::HasSubstr(
+          "Message mask concat type must have a size of at least 32 bytes."));
+}
+
+TEST_F(AnonymousTokensPublicKeysGetClientTest, MessageMaskNoMaskSizeNotZero) {
+  ASSERT_TRUE(
+      client_
+          ->CreateAnonymousTokensPublicKeysGetRequest(
+              TEST_USE_CASE, 0, start_time_, start_time_ + absl::Minutes(100))
+          .ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto response, SimpleGetResponse());
+  response.mutable_rsa_public_keys(0)->set_message_mask_type(
+      AT_MESSAGE_MASK_NO_MASK);
+
+  // If mask type is no mask, sizes other than 0 are invalid.
   response.mutable_rsa_public_keys(0)->set_message_mask_size(10);
 
   absl::StatusOr<std::vector<RSABlindSignaturePublicKey>> public_keys =
       client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(response);
   EXPECT_EQ(public_keys.status().code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(public_keys.status().message(),
-              testing::HasSubstr("Message mask size must be at least 32."));
+              testing::HasSubstr(
+                  "Message mask no mask type must be set to size 0 bytes."));
 }
 
 TEST_F(AnonymousTokensPublicKeysGetClientTest, KeySizeIsDifferentThanRealSize) {

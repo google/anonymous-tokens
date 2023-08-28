@@ -38,9 +38,16 @@ class  RsaSsaPssVerifier : public Verifier {
   // Passing of public_metadata is optional. If it is set to any value including
   // an empty string, RsaSsaPssVerifier will assume that partially blind RSA
   // signature protocol is being executed.
+  //
+  // If public metadata is passed and the boolean "use_rsa_public_exponent" is
+  // set to false, the public exponent in the public_key is not used in any
+  // computations in the protocol.
+  //
+  // Setting "use_rsa_public_exponent" to true is deprecated. All new users
+  // should set it to false.
   static absl::StatusOr<std::unique_ptr<RsaSsaPssVerifier>> New(
       int salt_length, const EVP_MD* sig_hash, const EVP_MD* mgf1_hash,
-      const RSAPublicKey& public_key,
+      const RSAPublicKey& public_key, bool use_rsa_public_exponent,
       std::optional<absl::string_view> public_metadata = std::nullopt);
 
   // Verifies the signature.
@@ -54,21 +61,16 @@ class  RsaSsaPssVerifier : public Verifier {
   RsaSsaPssVerifier(int salt_length,
                     std::optional<absl::string_view> public_metadata,
                     const EVP_MD* sig_hash, const EVP_MD* mgf1_hash,
-                    bssl::UniquePtr<RSA> rsa_public_key,
-                    bssl::UniquePtr<BIGNUM> rsa_modulus,
-                    bssl::UniquePtr<BIGNUM> augmented_rsa_e);
+                    bssl::UniquePtr<RSA> rsa_public_key);
 
   const int salt_length_;
   std::optional<std::string> public_metadata_;
-  const EVP_MD* sig_hash_;   // Owned by BoringSSL.
-  const EVP_MD* mgf1_hash_;  // Owned by BoringSSL.
+  const EVP_MD* const sig_hash_;   // Owned by BoringSSL.
+  const EVP_MD* const mgf1_hash_;  // Owned by BoringSSL.
 
+  // If public metadata is passed to RsaSsaPssVerifier::New, rsa_public_key_
+  // will be initialized using RSA_new_public_key_large_e method.
   const bssl::UniquePtr<RSA> rsa_public_key_;
-  // Storing RSA modulus separately for helping with BN computations.
-  const bssl::UniquePtr<BIGNUM> rsa_modulus_;
-  // If public metadata is not supported, augmented_rsa_e_ will be equal to
-  // public exponent e in rsa_public_key_.
-  const bssl::UniquePtr<BIGNUM> augmented_rsa_e_;
 };
 
 }  // namespace anonymous_tokens

@@ -25,6 +25,7 @@
 #include "absl/types/optional.h"
 #include "anonymous_tokens/cpp/shared/proto_utils.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
+#include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
 namespace anonymous_tokens {
@@ -92,10 +93,18 @@ absl::Status ValidityChecksForResponseProcessing(
     // Key size must be a valid value.
     return absl::InvalidArgumentError(
         "Key_size cannot be less than 256 bytes.");
-  } else if (public_key.message_mask_type() == AT_MESSAGE_MASK_TYPE_UNDEFINED) {
-    return absl::InvalidArgumentError("Message mask type must be defined.");
-  } else if (public_key.message_mask_size() < 32) {
-    return absl::InvalidArgumentError("Message mask size must be at least 32.");
+  } else if (public_key.message_mask_type() == AT_MESSAGE_MASK_TYPE_UNDEFINED ||
+             public_key.message_mask_type() == AT_MESSAGE_MASK_XOR) {
+    return absl::InvalidArgumentError(
+        "Message mask type must be defined and supported.");
+  } else if (public_key.message_mask_type() == AT_MESSAGE_MASK_CONCAT &&
+             public_key.message_mask_size() < 32) {
+    return absl::InvalidArgumentError(
+        "Message mask concat type must have a size of at least 32 bytes.");
+  } else if (public_key.message_mask_type() == AT_MESSAGE_MASK_NO_MASK &&
+             public_key.message_mask_size() != 0) {
+    return absl::InvalidArgumentError(
+        "Message mask no mask type must be set to size 0 bytes.");
   } else if (public_key.serialized_public_key().empty()) {
     // Public key should not be empty.
     return absl::InvalidArgumentError(

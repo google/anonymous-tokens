@@ -3,6 +3,42 @@ package(default_visibility = ["//:__subpackages__"])
 licenses(["notice"])
 
 cc_library(
+    name = "anonymous_tokens_pb_openssl_converters",
+    srcs = [
+        "anonymous_tokens_pb_openssl_converters.cc",
+    ],
+    hdrs = [
+        "anonymous_tokens_pb_openssl_converters.h",
+    ],
+    deps = [
+        ":constants",
+        ":crypto_utils",
+        "//anonymous_tokens/cpp/shared:status_utils",
+        "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
+        "@boringssl//:ssl",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "anonymous_tokens_pb_openssl_converters_test",
+    srcs = ["anonymous_tokens_pb_openssl_converters_test.cc"],
+    deps = [
+        ":anonymous_tokens_pb_openssl_converters",
+        ":constants",
+        ":crypto_utils",
+        "//anonymous_tokens/cpp/testing:proto_utils",
+        "//anonymous_tokens/cpp/testing:utils",
+        "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
+        "@boringssl//:ssl",
+        "@com_github_google_googletest//:gtest_main",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
     name = "blinder",
     hdrs = ["blinder.h"],
     deps = [
@@ -31,7 +67,6 @@ cc_library(
     deps = [
         ":constants",
         "//anonymous_tokens/cpp/shared:status_utils",
-        "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -45,7 +80,6 @@ cc_test(
     deps = [
         ":crypto_utils",
         "//anonymous_tokens/cpp/testing:utils",
-        "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
         "@com_github_google_googletest//:gtest_main",
         "@com_google_absl//absl/strings",
@@ -61,7 +95,6 @@ cc_library(
         ":constants",
         ":crypto_utils",
         "//anonymous_tokens/cpp/shared:status_utils",
-        "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -74,10 +107,8 @@ cc_test(
     srcs = ["rsa_blinder_test.cc"],
     deps = [
         ":constants",
-        ":crypto_utils",
         ":rsa_blinder",
         "//anonymous_tokens/cpp/testing:utils",
-        "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
         "@com_github_google_googletest//:gtest_main",
         "@com_google_absl//absl/status",
@@ -100,6 +131,7 @@ cc_library(
     srcs = ["rsa_blind_signer.cc"],
     hdrs = ["rsa_blind_signer.h"],
     deps = [
+        ":anonymous_tokens_pb_openssl_converters",
         ":blind_signer",
         ":constants",
         ":crypto_utils",
@@ -121,6 +153,7 @@ cc_test(
         ":crypto_utils",
         ":rsa_blind_signer",
         ":rsa_ssa_pss_verifier",
+        "//anonymous_tokens/cpp/testing:proto_utils",
         "//anonymous_tokens/cpp/testing:utils",
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
@@ -145,6 +178,7 @@ cc_library(
     srcs = ["rsa_ssa_pss_verifier.cc"],
     hdrs = ["rsa_ssa_pss_verifier.h"],
     deps = [
+        ":anonymous_tokens_pb_openssl_converters",
         ":constants",
         ":crypto_utils",
         ":verifier",
@@ -162,9 +196,11 @@ cc_test(
     name = "rsa_ssa_pss_verifier_test",
     srcs = ["rsa_ssa_pss_verifier_test.cc"],
     deps = [
+        ":anonymous_tokens_pb_openssl_converters",
         ":constants",
         ":crypto_utils",
         ":rsa_ssa_pss_verifier",
+        "//anonymous_tokens/cpp/testing:proto_utils",
         "//anonymous_tokens/cpp/testing:utils",
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",

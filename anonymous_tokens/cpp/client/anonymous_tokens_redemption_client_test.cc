@@ -48,6 +48,7 @@ std::string GetRandomString(int n, std::uniform_int_distribution<int>* distr_u8,
 struct RedemptionInfoAndResult {
   std::string plaintext_message;
   std::string public_metadata;
+  std::string message_mask;
   bool redeemed;
   bool double_spent;
 };
@@ -62,6 +63,7 @@ CreateTokenToRedemptionResultMap(
     response_map[result.serialized_unblinded_token()] = {
         .plaintext_message = result.plaintext_message(),
         .public_metadata = result.public_metadata(),
+        .message_mask = result.message_mask(),
         .redeemed = result.verified(),
         .double_spent = result.double_spent(),
     };
@@ -196,17 +198,6 @@ TEST_F(AnonymousTokensRedemptionClientTest, MissingTokenInRequest) {
   EXPECT_THAT(redemption_request.status().message(), HasSubstr("empty token"));
 }
 
-TEST_F(AnonymousTokensRedemptionClientTest, MissingMask) {
-  dummy_token_with_input_.mutable_token()->clear_message_mask();
-  absl::StatusOr<AnonymousTokensRedemptionRequest> redemption_request =
-      client_->CreateAnonymousTokensRedemptionRequest(
-          {dummy_token_with_input_});
-  EXPECT_EQ(redemption_request.status().code(),
-            absl::StatusCode::kInvalidArgument);
-  EXPECT_THAT(redemption_request.status().message(),
-              HasSubstr("must have a message mask"));
-}
-
 TEST_F(AnonymousTokensRedemptionClientTest, WrongMaskSize) {
   dummy_token_with_input_.mutable_token()->set_message_mask("wrongmasksize");
   absl::StatusOr<AnonymousTokensRedemptionRequest> redemption_request =
@@ -322,8 +313,9 @@ TEST_F(AnonymousTokensRedemptionClientTest, MissingMaskInResponse) {
           client_->ProcessAnonymousTokensRedemptionResponse(dummy_response_);
   EXPECT_EQ(redemption_result.status().code(),
             absl::StatusCode::kInvalidArgument);
-  EXPECT_THAT(redemption_result.status().message(),
-              HasSubstr("Message mask cannot be empty"));
+  EXPECT_THAT(
+      redemption_result.status().message(),
+      HasSubstr("Response message mask does not match input message mask"));
 }
 
 TEST_F(AnonymousTokensRedemptionClientTest, WrongMaskSizeInResponse) {
@@ -461,19 +453,23 @@ TEST_F(AnonymousTokensRedemptionClientTest,
   RSABlindSignatureTokenWithInput token_with_empty_message =
       GetRandomDummyTokenWithInput();
   token_with_empty_message.mutable_input()->clear_plaintext_message();
+  RSABlindSignatureTokenWithInput token_with_empty_mask =
+      GetRandomDummyTokenWithInput();
+  token_with_empty_mask.mutable_token()->clear_message_mask();
   std::vector<RSABlindSignatureTokenWithInput> tokens_with_inputs = {
       dummy_token_with_input_, GetRandomDummyTokenWithInput(),
-      GetRandomDummyTokenWithInput(), token_with_empty_message};
+      GetRandomDummyTokenWithInput(), token_with_empty_message,
+      token_with_empty_mask};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       auto _,
       client_->CreateAnonymousTokensRedemptionRequest(tokens_with_inputs));
   *(dummy_response_.add_anonymous_token_redemption_results()) =
       CreateRedemptionResultForTesting(tokens_with_inputs[1], false, true,
                                        TEST_USE_CASE, 1);
-  *(dummy_response_.add_anonymous_token_redemption_results()) =
-      CreateRedemptionResultForTesting(tokens_with_inputs[2]);
-  *(dummy_response_.add_anonymous_token_redemption_results()) =
-      CreateRedemptionResultForTesting(tokens_with_inputs[3]);
+  for (int i = 2; i < tokens_with_inputs.size(); ++i) {
+    *(dummy_response_.add_anonymous_token_redemption_results()) =
+        CreateRedemptionResultForTesting(tokens_with_inputs[i]);
+  }
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       auto rsa_blind_sig_redemption_results,
       client_->ProcessAnonymousTokensRedemptionResponse(dummy_response_));
@@ -489,11 +485,11 @@ TEST_F(AnonymousTokensRedemptionClientTest,
                   .input()
                   .plaintext_message(),
               tokens_to_result_map[token].plaintext_message);
-    EXPECT_TRUE(!rsa_blind_sig_redemption_results[i]
-                     .token_with_input()
-                     .token()
-                     .message_mask()
-                     .empty());
+    EXPECT_EQ(rsa_blind_sig_redemption_results[i]
+                  .token_with_input()
+                  .token()
+                  .message_mask(),
+              tokens_to_result_map[token].message_mask);
     EXPECT_EQ(rsa_blind_sig_redemption_results[i]
                   .token_with_input()
                   .input()

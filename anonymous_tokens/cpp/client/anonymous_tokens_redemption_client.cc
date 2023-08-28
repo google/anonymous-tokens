@@ -57,12 +57,11 @@ AnonymousTokensRedemptionClient::CreateAnonymousTokensRedemptionRequest(
     if (token_with_input.token().token().empty()) {
       return absl::InvalidArgumentError(
           "Cannot send an empty token to redeem.");
-    } else if (token_with_input.token().message_mask().empty()) {
-      return absl::InvalidArgumentError("Token must have a message mask.");
-    } else if (token_with_input.token().message_mask().size() <
-               kRsaMessageMaskSizeInBytes32) {
+    } else if (!token_with_input.token().message_mask().empty() &&
+               token_with_input.token().message_mask().size() <
+                   kRsaMessageMaskSizeInBytes32) {
       return absl::InvalidArgumentError(
-          "Token must have a message mask of at least 32 bytes.");
+          "Message mask must be of at least 32 bytes, if it exists.");
     }
     // Check if token is repeated in the input and keep state for response
     // processing if it was not repeated.
@@ -128,12 +127,11 @@ AnonymousTokensRedemptionClient::ProcessAnonymousTokensRedemptionResponse(
           "Key version does not match the requested key version.");
     } else if (redemption_result.serialized_unblinded_token().empty()) {
       return absl::InvalidArgumentError("Token cannot be empty in response.");
-    } else if (redemption_result.message_mask().empty()) {
-      return absl::InvalidArgumentError("Message mask cannot be empty.");
-    } else if (redemption_result.message_mask().size() <
-               kRsaMessageMaskSizeInBytes32) {
+    } else if (!redemption_result.message_mask().empty() &&
+               redemption_result.message_mask().size() <
+                   kRsaMessageMaskSizeInBytes32) {
       return absl::InvalidArgumentError(
-          "Message mask of at least 32 bytes is required.");
+          "Message mask must be of at least 32 bytes, if it exists.");
     }
     // Check for duplicate in responses.
     auto maybe_inserted =

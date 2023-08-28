@@ -27,6 +27,7 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
 #include "anonymous_tokens/cpp/crypto/rsa_ssa_pss_verifier.h"
+#include "anonymous_tokens/cpp/testing/proto_utils.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/digest.h>
@@ -76,19 +77,22 @@ TEST_P(RsaBlindSignerTest, StandardSignerWorks) {
       std::string encoded_message,
       EncodeMessageForTests(message, public_key_, sig_hash_, mgf1_hash_,
                             salt_length_));
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::unique_ptr<RsaBlindSigner> signer,
-                                   RsaBlindSigner::New(private_key_));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<RsaBlindSigner> signer,
+      RsaBlindSigner::New(private_key_, /*use_rsa_public_exponent=*/true));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string potentially_insecure_signature,
                                    signer->Sign(encoded_message));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto verifier,
-      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_));
+      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_,
+                             /*use_rsa_public_exponent=*/true));
   EXPECT_TRUE(verifier->Verify(potentially_insecure_signature, message).ok());
 }
 
 TEST_P(RsaBlindSignerTest, SignerFails) {
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::unique_ptr<RsaBlindSigner> signer,
-                                   RsaBlindSigner::New(private_key_));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<RsaBlindSigner> signer,
+      RsaBlindSigner::New(private_key_, /*use_rsa_public_exponent=*/true));
   absl::string_view message = "Hello World!";
 
   absl::StatusOr<std::string> signature = signer->Sign(message);
@@ -102,7 +106,8 @@ TEST_P(RsaBlindSignerTest, SignerFails) {
                                    signer->Sign(message2));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto verifier,
-      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_));
+      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_,
+                             /*use_rsa_public_exponent=*/true));
   absl::Status verification_result = verifier->Verify(insecure_sig, message2);
   EXPECT_EQ(verification_result.code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(verification_result.message(),
@@ -115,11 +120,16 @@ INSTANTIATE_TEST_SUITE_P(RsaBlindSignerTest, RsaBlindSignerTest,
                                            &GetStrongRsaKeys3072,
                                            &GetStrongRsaKeys4096));
 
+using RsaBlindSignerPublicMetadataTestParams =
+    std::tuple<absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>,
+               /*use_rsa_public_exponent*/ bool>;
+
 class RsaBlindSignerTestWithPublicMetadata
-    : public ::testing::TestWithParam<CreateTestKeyPairFunction *> {
+    : public ::testing::TestWithParam<RsaBlindSignerPublicMetadataTestParams> {
  protected:
   void SetUp() override {
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, (*GetParam())());
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, std::get<0>(GetParam()));
+    use_rsa_public_exponent_ = std::get<1>(GetParam());
     public_key_ = std::move(keys_pair.first);
     private_key_ = std::move(keys_pair.second);
     // NOTE: using recommended RsaSsaPssParams
@@ -133,6 +143,7 @@ class RsaBlindSignerTestWithPublicMetadata
   const EVP_MD *sig_hash_;   // Owned by BoringSSL.
   const EVP_MD *mgf1_hash_;  // Owned by BoringSSL.
   int salt_length_;
+  bool use_rsa_public_exponent_;
 };
 
 // This test only tests whether the implemented signer 'signs' properly under
@@ -150,12 +161,14 @@ TEST_P(RsaBlindSignerTestWithPublicMetadata, SignerWorksWithPublicMetadata) {
                             mgf1_hash_, salt_length_));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<RsaBlindSigner> signer,
-      RsaBlindSigner::New(private_key_, public_metadata));
+      RsaBlindSigner::New(private_key_, use_rsa_public_exponent_,
+                          public_metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string potentially_insecure_signature,
                                    signer->Sign(encoded_message));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-      auto verifier, RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_,
-                                            public_key_, public_metadata));
+      auto verifier,
+      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_,
+                             use_rsa_public_exponent_, public_metadata));
   EXPECT_TRUE(verifier->Verify(potentially_insecure_signature, message).ok());
 }
 
@@ -171,13 +184,14 @@ TEST_P(RsaBlindSignerTestWithPublicMetadata,
                             mgf1_hash_, salt_length_));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<RsaBlindSigner> signer,
-      RsaBlindSigner::New(private_key_, empty_public_metadata));
+      RsaBlindSigner::New(private_key_, use_rsa_public_exponent_,
+                          empty_public_metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string potentially_insecure_signature,
                                    signer->Sign(encoded_message));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       auto verifier,
       RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_,
-                             empty_public_metadata));
+                             use_rsa_public_exponent_, empty_public_metadata));
   EXPECT_TRUE(verifier->Verify(potentially_insecure_signature, message).ok());
 }
 
@@ -194,12 +208,14 @@ TEST_P(RsaBlindSignerTestWithPublicMetadata,
                             mgf1_hash_, salt_length_));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<RsaBlindSigner> signer,
-      RsaBlindSigner::New(private_key_, public_metadata));
+      RsaBlindSigner::New(private_key_, use_rsa_public_exponent_,
+                          public_metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string potentially_insecure_signature,
                                    signer->Sign(encoded_message));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-      auto verifier, RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_,
-                                            public_key_, public_metadata_2));
+      auto verifier,
+      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_,
+                             use_rsa_public_exponent_, public_metadata_2));
   absl::Status verification_result =
       verifier->Verify(potentially_insecure_signature, message);
   EXPECT_EQ(verification_result.code(), absl::StatusCode::kInvalidArgument);
@@ -220,12 +236,14 @@ TEST_P(RsaBlindSignerTestWithPublicMetadata,
                             mgf1_hash_, salt_length_));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<RsaBlindSigner> signer,
-      RsaBlindSigner::New(private_key_, public_metadata));
+      RsaBlindSigner::New(private_key_, use_rsa_public_exponent_,
+                          public_metadata));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string potentially_insecure_signature,
                                    signer->Sign(encoded_message));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-      auto verifier, RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_,
-                                            public_key_, public_metadata_2));
+      auto verifier,
+      RsaSsaPssVerifier::New(salt_length_, sig_hash_, mgf1_hash_, public_key_,
+                             use_rsa_public_exponent_, public_metadata_2));
   absl::Status verification_result =
       verifier->Verify(potentially_insecure_signature, message);
   EXPECT_EQ(verification_result.code(), absl::StatusCode::kInvalidArgument);
@@ -235,8 +253,10 @@ TEST_P(RsaBlindSignerTestWithPublicMetadata,
 
 INSTANTIATE_TEST_SUITE_P(
     RsaBlindSignerTestWithPublicMetadata, RsaBlindSignerTestWithPublicMetadata,
-    ::testing::Values(&GetStrongRsaKeys2048, &GetAnotherStrongRsaKeys2048,
-                      &GetStrongRsaKeys3072, &GetStrongRsaKeys4096));
+    ::testing::Combine(
+        ::testing::Values(GetStrongRsaKeys2048(), GetAnotherStrongRsaKeys2048(),
+                          GetStrongRsaKeys3072(), GetStrongRsaKeys4096()),
+        /*use_rsa_public_exponent*/ ::testing::Values(true, false)));
 
 TEST(IetfRsaBlindSignerTest,
      IetfRsaBlindSignaturesWithPublicMetadataTestVectorsSuccess) {
@@ -247,7 +267,26 @@ TEST(IetfRsaBlindSignerTest,
   for (const auto &test_vector : test_vectors) {
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
         std::unique_ptr<RsaBlindSigner> signer,
-        RsaBlindSigner::New(test_key.second, test_vector.public_metadata));
+        RsaBlindSigner::New(test_key.second, /*use_rsa_public_exponent=*/true,
+                            test_vector.public_metadata));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string blind_signature,
+                                     signer->Sign(test_vector.blinded_message));
+    EXPECT_EQ(blind_signature, test_vector.blinded_signature);
+  }
+}
+
+TEST(IetfRsaBlindSignerTest,
+     IetfPartiallyBlindRsaSignaturesNoPublicExponentTestVectorsSuccess) {
+  auto test_vectors =
+      GetIetfPartiallyBlindRSASignatureNoPublicExponentTestVectors();
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      const auto test_key,
+      GetIetfRsaBlindSignatureWithPublicMetadataTestKeys());
+  for (const auto &test_vector : test_vectors) {
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<RsaBlindSigner> signer,
+        RsaBlindSigner::New(test_key.second, /*use_rsa_public_exponent=*/false,
+                            test_vector.public_metadata));
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string blind_signature,
                                      signer->Sign(test_vector.blinded_message));
     EXPECT_EQ(blind_signature, test_vector.blinded_signature);
