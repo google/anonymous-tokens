@@ -4,7 +4,10 @@ cc_library(
     name = "proto_utils",
     testonly = 1,
     srcs = ["proto_utils.cc"],
-    hdrs = ["proto_utils.h"],
+    hdrs = [
+        "proto_utils.h",
+        "testdata_utils.h",
+    ],
     data = ["//anonymous_tokens/testdata:strong_rsa_example_keys"],
     deps = [
         ":utils",

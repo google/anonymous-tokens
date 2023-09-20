@@ -8,6 +8,7 @@ cc_library(
     hdrs = ["proto_utils.h"],
     deps = [
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
