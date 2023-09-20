@@ -181,7 +181,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        CreateAnonymousTokensPublicKeysGetRequestWithNoExpiryTime) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       auto request, client_->CreateAnonymousTokensPublicKeysGetRequest(
-                        TEST_USE_CASE, 0, start_time_, std::nullopt));
+                        TEST_USE_CASE, 0, start_time_, absl::nullopt));
 
   EXPECT_EQ(request.use_case(), AnonymousTokensUseCase_Name(TEST_USE_CASE));
   EXPECT_EQ(request.key_version(), 0);
@@ -544,7 +544,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        KeyWithExpirationTimeReturnedButIndefinitelyValidKeyWasRequested) {
   ASSERT_TRUE(client_
                   ->CreateAnonymousTokensPublicKeysGetRequest(
-                      TEST_USE_CASE, 0, start_time_, std::nullopt)
+                      TEST_USE_CASE, 0, start_time_, absl::nullopt)
                   .ok());
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto response, SimpleGetResponse());
 
@@ -679,7 +679,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        ProcessPublicKeyGetResponseNoExpiry) {
   ASSERT_TRUE(client_
                   ->CreateAnonymousTokensPublicKeysGetRequest(
-                      TEST_USE_CASE, 1, start_time_, std::nullopt)
+                      TEST_USE_CASE, 1, start_time_, absl::nullopt)
                   .ok());
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto single_key_resp, SimpleGetResponse());
   single_key_resp.mutable_rsa_public_keys(0)->clear_expiration_time();

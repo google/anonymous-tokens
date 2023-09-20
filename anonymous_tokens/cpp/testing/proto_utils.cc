@@ -28,10 +28,9 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
+#include "anonymous_tokens/cpp/testing/testdata_utils.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
-
-
 #include <openssl/base.h>
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
@@ -246,7 +245,7 @@ absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>> GetStandardRsaKeyPair(
 }
 
 absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>> GetStrongRsaKeys2048() {
-  std::string path = absl::StrCat("anonymous_tokens/testdata/",
+  std::string path = absl::StrCat(::anonymous_tokens::GetTestdataPath(),
                                   "strong_rsa_modulus2048_example.binarypb");
   ANON_TOKENS_ASSIGN_OR_RETURN(auto key_pair, ParseRsaKeysFromFile(path));
   return std::make_pair(std::move(key_pair.first), std::move(key_pair.second));
@@ -254,21 +253,21 @@ absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>> GetStrongRsaKeys2048() {
 
 absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>
 GetAnotherStrongRsaKeys2048() {
-  std::string path = absl::StrCat("anonymous_tokens/testdata/",
+  std::string path = absl::StrCat(::anonymous_tokens::GetTestdataPath(),
                                   "strong_rsa_modulus2048_example_2.binarypb");
   ANON_TOKENS_ASSIGN_OR_RETURN(auto key_pair, ParseRsaKeysFromFile(path));
   return std::make_pair(std::move(key_pair.first), std::move(key_pair.second));
 }
 
 absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>> GetStrongRsaKeys3072() {
-  std::string path = absl::StrCat("anonymous_tokens/testdata/",
+  std::string path = absl::StrCat(::anonymous_tokens::GetTestdataPath(),
                                   "strong_rsa_modulus3072_example.binarypb");
   ANON_TOKENS_ASSIGN_OR_RETURN(auto key_pair, ParseRsaKeysFromFile(path));
   return std::make_pair(std::move(key_pair.first), std::move(key_pair.second));
 }
 
 absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>> GetStrongRsaKeys4096() {
-  std::string path = absl::StrCat("anonymous_tokens/testdata/",
+  std::string path = absl::StrCat(::anonymous_tokens::GetTestdataPath(),
                                   "strong_rsa_modulus4096_example.binarypb");
   ANON_TOKENS_ASSIGN_OR_RETURN(auto key_pair, ParseRsaKeysFromFile(path));
   return std::make_pair(std::move(key_pair.first), std::move(key_pair.second));
