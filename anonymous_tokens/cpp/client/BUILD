@@ -95,6 +95,5 @@ cc_test(
         "//anonymous_tokens/cpp/testing:utils",
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@com_github_google_googletest//:gtest_main",
-        "@com_google_absl//absl/flags:flag",
     ],
 )
