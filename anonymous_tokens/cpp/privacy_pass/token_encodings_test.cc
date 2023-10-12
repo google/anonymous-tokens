@@ -64,7 +64,6 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, EmptyMarshalTokenTest) {
   Token token;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
                                    MarshalToken(token));
-
   std::string expected_token_encoding = absl::HexStringToBytes("DA7A");
 
   EXPECT_EQ(encoded_token, expected_token_encoding);
@@ -414,6 +413,29 @@ TEST(AnonymousTokensDebugMode, InvalidMode) {
   EXPECT_EQ(ext.extension_type, 0xF002);
   ext.extension_value = std::string("~");
   EXPECT_FALSE(DebugMode::FromExtension(ext).ok());
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     EmptyMarshalTokenChallengeTest) {
+  TokenChallenge token_challenge;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
+                                   MarshalTokenChallenge(token_challenge));
+
+  std::string expected_token_encoding = absl::HexStringToBytes("DA7A0000");
+
+  EXPECT_EQ(encoded_token, expected_token_encoding);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, MarshalTokenChallengeTest) {
+  TokenChallenge token_challenge;
+  token_challenge.issuer_name = "issuer.google.com";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
+                                   MarshalTokenChallenge(token_challenge));
+
+  std::string expected_token_encoding =
+      absl::HexStringToBytes("da7a00116973737565722e676f6f676c652e636f6d");
+
+  EXPECT_EQ(encoded_token, expected_token_encoding);
 }
 
 }  // namespace

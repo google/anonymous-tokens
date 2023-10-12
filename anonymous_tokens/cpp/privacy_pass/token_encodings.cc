@@ -448,5 +448,40 @@ absl::StatusOr<Extensions>  DecodeExtensions(
   return extensions;
 }
 
+absl::StatusOr<std::string> MarshalTokenChallenge(
+    const TokenChallenge& token_challenge) {
+  // Main CryptoByteBuilder object cbb which will be passed to CBB_finish to
+  // finalize the output string.
+  bssl::ScopedCBB cbb;
+  // initial_capacity only serves as a hint.
+  if (!CBB_init(cbb.get(), /*initial_capacity=*/98)) {
+    return absl::InternalError("CBB_init() failed.");
+  }
+  // Add token_type to cbb.
+  if (!CBB_add_u16(cbb.get(), token_challenge.token_type)) {
+    return absl::InvalidArgumentError("Could not add token_type to cbb.");
+  }
+  // Add issuer_name to cbb using temporary cbb struct object issuer_name_cbb.
+  CBB issuer_name_cbb;
+  if (!CBB_add_u16_length_prefixed(cbb.get(), &issuer_name_cbb) ||
+      !CBB_add_bytes(
+          &issuer_name_cbb,
+          reinterpret_cast<const uint8_t*>(token_challenge.issuer_name.data()),
+          token_challenge.issuer_name.size())) {
+    return absl::InvalidArgumentError("Could not add issuer_name to cbb.");
+  }
+  uint8_t* marshaled_challenge;
+  size_t marshaled_challenge_len;
+  if (!CBB_finish(cbb.get(), &marshaled_challenge, &marshaled_challenge_len)) {
+    return absl::InvalidArgumentError("Failed to marshal token challenge");
+  }
+  std::string marshaled_challenge_str(
+      reinterpret_cast<const char*>(marshaled_challenge),
+      marshaled_challenge_len);
+  // Free memory.
+  OPENSSL_free(marshaled_challenge);
+  return marshaled_challenge_str;
+}
+
 }  // namespace anonymous_tokens
 

@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 
 #include "absl/status/statusor.h"
@@ -151,6 +152,20 @@ struct  Token {
   std::string authenticator;
 };
 
+// TokenChallenge is a structure that is sent from origins to the client. It
+// contains information used to generate the token.
+// Fields are described here:
+// https://datatracker.ietf.org/doc/html/draft-ietf-privacypass-auth-scheme-14#challenge
+// However, we will not use the redemption_context and origin_info fields.
+// Our scheme combines the origin and issuer so they are superfluous.
+//
+// The token_type is initialized to a default value of 0xDA7A which represents
+// RSA Blind Signatures with Public Metadata.
+struct TokenChallenge {
+  uint16_t token_type{0XDA7A};
+  std::string issuer_name;
+};
+
 // This methods takes in a Token and outputs the authenticator input /
 // token_input, defined in the specification:
 // https://smhendrickson.github.io/draft-hendrickson-privacypass-public-metadata-issuance/draft-hendrickson-privacypass-public-metadata.html
@@ -180,6 +195,10 @@ absl::StatusOr<std::string>  EncodeExtensions(
 // Extensions struct.
 absl::StatusOr<Extensions>  DecodeExtensions(
     absl::string_view encoded_extensions);
+
+// This method takes in a TokenChallenge structure and encodes it into a string.
+absl::StatusOr<std::string>  MarshalTokenChallenge(
+    const TokenChallenge& token_challenge);
 
 }  // namespace anonymous_tokens
 
