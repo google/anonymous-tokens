@@ -23,8 +23,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 
-
-
 namespace anonymous_tokens {
 
 // blinded_token_request will be encoded in 256 bytes for token type DA7A.
