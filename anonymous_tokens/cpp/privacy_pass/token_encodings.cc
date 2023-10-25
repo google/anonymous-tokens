@@ -16,10 +16,12 @@
 
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <ios>
 #include <limits>
 #include <optional>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -424,6 +426,46 @@ absl::StatusOr<DebugMode> DebugMode::FromExtension(const Extension& ext) {
   return dm;
 }
 
+absl::StatusOr<Extension> ProxyLayer::AsExtension() const {
+  bssl::ScopedCBB cbb;
+  if (!CBB_init(cbb.get(), sizeof(uint8_t))) {
+    return absl::InternalError("CBB_init() failed.");
+  }
+  if (!CBB_add_u8(cbb.get(), layer)) {
+    return absl::InternalError("Failed to add layer to cbb.");
+  }
+  uint8_t* wire_format;
+  size_t wire_format_len;
+  if (!CBB_finish(cbb.get(), &wire_format, &wire_format_len)) {
+    return absl::InternalError("Failed to generate wire format.");
+  }
+  std::string wire_format_str(reinterpret_cast<const char*>(wire_format),
+                              wire_format_len);
+  OPENSSL_free(wire_format);
+  return Extension{.extension_type = 0xF003,
+                   .extension_value = wire_format_str};
+}
+
+absl::StatusOr<ProxyLayer> ProxyLayer::FromExtension(const Extension& ext) {
+  if (ext.extension_type != 0xF003) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "[ProxyLayer] extension of wrong type: ", ext.extension_type));
+  }
+  ProxyLayer pl;
+  CBS cbs;
+  CBS_init(&cbs, reinterpret_cast<const uint8_t*>(ext.extension_value.data()),
+           ext.extension_value.size());
+  if (!CBS_get_u8(&cbs, &pl.layer)) {
+    return absl::InvalidArgumentError(
+        "[ProxyLayer] failed to read len from extension");
+  }
+  if (pl.layer != kProxyA && pl.layer != kProxyB) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("[ProxyLayer] invalid layer: ", pl.layer));
+  }
+  return pl;
+}
+
 absl::StatusOr<Extensions>  DecodeExtensions(
     absl::string_view encoded_extensions) {
   CBS cbs;
@@ -481,6 +523,148 @@ absl::StatusOr<std::string> MarshalTokenChallenge(
   // Free memory.
   OPENSSL_free(marshaled_challenge);
   return marshaled_challenge_str;
+}
+
+absl::StatusOr<std::string> MarshalTokenRequest(
+    const TokenRequest& token_request) {
+  // Main CryptoByteBuilder object cbb which will be passed to CBB_finish to
+  // finalize the output string.
+  bssl::ScopedCBB cbb;
+  // initial_capacity only serves as a hint.
+  if (!CBB_init(cbb.get(),
+                /*initial_capacity=*/kDA7AMarshaledTokenRequestSizeInBytes)) {
+    return absl::InternalError("CBB_init() failed.");
+  }
+  // Add token_type to cbb.
+  if (!CBB_add_u16(cbb.get(), token_request.token_type) ||
+      // Add truncated_token_key_id to cbb.
+      !CBB_add_u8(cbb.get(), token_request.truncated_token_key_id) ||
+      // Add blinded_token_request string to cbb.
+      !CBB_add_bytes(cbb.get(),
+                     reinterpret_cast<const uint8_t*>(
+                         token_request.blinded_token_request.data()),
+                     token_request.blinded_token_request.size())) {
+    return absl::InvalidArgumentError(
+        "Could not construct cbb with given inputs.");
+  }
+
+  uint8_t* encoded_output;
+  size_t encoded_output_len;
+  if (!CBB_finish(cbb.get(), &encoded_output, &encoded_output_len)) {
+    return absl::InvalidArgumentError(
+        "Failed to generate token request encoding");
+  }
+  std::string encoded_output_str(reinterpret_cast<const char*>(encoded_output),
+                                 encoded_output_len);
+  // Free memory.
+  OPENSSL_free(encoded_output);
+  return encoded_output_str;
+}
+
+absl::StatusOr<TokenRequest> UnmarshalTokenRequest(
+    absl::string_view token_request) {
+  TokenRequest out;
+  out.blinded_token_request.resize(kDA7ABlindedTokenRequestSizeInBytes);
+  CBS cbs;
+  CBS_init(&cbs, reinterpret_cast<const uint8_t*>(token_request.data()),
+           token_request.size());
+  if (!CBS_get_u16(&cbs, &out.token_type)) {
+    return absl::InvalidArgumentError("failed to read token type");
+  }
+  if (out.token_type != 0xDA7A) {
+    return absl::InvalidArgumentError("unsupported token type");
+  }
+  if (!CBS_get_u8(&cbs, &out.truncated_token_key_id)) {
+    return absl::InvalidArgumentError("failed to read truncated_token_key_id");
+  }
+  if (!CBS_copy_bytes(
+          &cbs, reinterpret_cast<uint8_t*>(out.blinded_token_request.data()),
+          out.blinded_token_request.size())) {
+    return absl::InvalidArgumentError("failed to read blinded_token_request");
+  }
+  if (CBS_len(&cbs) != 0) {
+    return absl::InvalidArgumentError("token request had extra bytes");
+  }
+  return out;
+}
+
+absl::StatusOr<std::string> MarshalExtendedTokenRequest(
+    const ExtendedTokenRequest& extended_token_request) {
+  // Main CryptoByteBuilder object cbb which will be passed to CBB_finish to
+  // finalize the output string.
+  bssl::ScopedCBB cbb;
+  // Initial_capacity only serves as a hint. Note that
+  // extended_token_request.request would occupy 259 bytes as the token type is
+  // DA7A and we will add some additional bytes as  buffer for the extensions.
+  if (!CBB_init(
+          cbb.get(),
+          /*initial_capacity=*/kDA7AMarshaledTokenRequestSizeInBytes + 41)) {
+    return absl::InternalError("CBB_init() failed.");
+  }
+  // Marshal TokenRequest structure.
+  ANON_TOKENS_ASSIGN_OR_RETURN(
+      std::string encoded_request,
+      MarshalTokenRequest(extended_token_request.request));
+  // Marshal Extensions structure.
+  ANON_TOKENS_ASSIGN_OR_RETURN(
+      std::string encoded_extensions,
+      EncodeExtensions(extended_token_request.extensions));
+
+  // Add encoded_request to cbb.
+  if (!CBB_add_bytes(cbb.get(),
+                     reinterpret_cast<const uint8_t*>(encoded_request.data()),
+                     encoded_request.size()) ||
+      // Add encoded_extensions to cbb.
+      !CBB_add_bytes(
+          cbb.get(),
+          reinterpret_cast<const uint8_t*>(encoded_extensions.data()),
+          encoded_extensions.size())) {
+    return absl::InvalidArgumentError(
+        "Could not construct cbb with given inputs.");
+  }
+
+  uint8_t* encoded_output;
+  size_t encoded_output_len;
+  if (!CBB_finish(cbb.get(), &encoded_output, &encoded_output_len)) {
+    return absl::InvalidArgumentError(
+        "Failed to generate token request encoding");
+  }
+  std::string encoded_output_str(reinterpret_cast<const char*>(encoded_output),
+                                 encoded_output_len);
+  // Free memory.
+  OPENSSL_free(encoded_output);
+  return encoded_output_str;
+}
+
+absl::StatusOr<ExtendedTokenRequest> UnmarshalExtendedTokenRequest(
+    absl::string_view extended_token_request) {
+  CBS cbs;
+  CBS_init(&cbs,
+           reinterpret_cast<const uint8_t*>(extended_token_request.data()),
+           extended_token_request.size());
+
+  std::string encoded_token_request;
+  encoded_token_request.resize(kDA7AMarshaledTokenRequestSizeInBytes);
+  if (!CBS_copy_bytes(&cbs,
+                      reinterpret_cast<uint8_t*>(encoded_token_request.data()),
+                      encoded_token_request.size())) {
+    return absl::InvalidArgumentError("failed to read encoded_token_request");
+  }
+
+  std::string encoded_extensions;
+  encoded_extensions.resize(CBS_len(&cbs));
+  if (!CBS_copy_bytes(&cbs,
+                      reinterpret_cast<uint8_t*>(encoded_extensions.data()),
+                      encoded_extensions.size())) {
+    return absl::InvalidArgumentError("failed to read encoded_extensions");
+  }
+
+  ExtendedTokenRequest out;
+  ANON_TOKENS_ASSIGN_OR_RETURN(out.request,
+                               UnmarshalTokenRequest(encoded_token_request));
+  ANON_TOKENS_ASSIGN_OR_RETURN(out.extensions,
+                               DecodeExtensions(encoded_extensions));
+  return out;
 }
 
 }  // namespace anonymous_tokens

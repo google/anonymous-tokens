@@ -21,10 +21,17 @@
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 
 
 
 namespace anonymous_tokens {
+
+// blinded_token_request will be encoded in 256 bytes for token type DA7A.
+constexpr int kDA7ABlindedTokenRequestSizeInBytes = 256;
+
+// TokenRequest struct will be encoded in 259 bytes for token type DA7A.
+constexpr int kDA7AMarshaledTokenRequestSizeInBytes = 259;
 
 // TokenRequest contains the blinded_token_request along with the token type
 // represented using two bytes and the truncated_token_key_id which is the last
@@ -121,6 +128,26 @@ struct  DebugMode {
   static absl::StatusOr<DebugMode> FromExtension(const Extension& ext);
 };
 
+// ProxyLayer allows verifiers corresponding to a particular layer to check that
+// the request is intended for them.
+//  - 0x00 is proxy A.
+//  - 0x01 is proxy B.
+//  - Any other mode value is invalid.
+// Represents a private extension using id 0xF003.
+struct  ProxyLayer {
+  // Layer values
+  // We don't use an enum here because SWIG doesn't support c++11 typed enums,
+  // and we need enum to be exactly uint8
+  typedef uint8_t Layer;
+  static constexpr Layer kProxyA = 0x00;
+  static constexpr Layer kProxyB = 0x01;
+  Layer layer;
+
+  absl::StatusOr<Extension> AsExtension() const;
+
+  static absl::StatusOr<ProxyLayer> FromExtension(const Extension& ext);
+};
+
 // The contents of Extensions is a list of Extension values. The length (size in
 // bytes) of this list should be a 2-octet integer.
 struct  Extensions {
@@ -199,6 +226,25 @@ absl::StatusOr<Extensions>  DecodeExtensions(
 // This method takes in a TokenChallenge structure and encodes it into a string.
 absl::StatusOr<std::string>  MarshalTokenChallenge(
     const TokenChallenge& token_challenge);
+
+// This method takes in a TokenRequest structure and encodes it into a string.
+absl::StatusOr<std::string>  MarshalTokenRequest(
+    const TokenRequest& token_request);
+
+// This methods takes in an encoded TokenRequest and decodes it into a
+// TokenRequest struct.
+absl::StatusOr<TokenRequest>  UnmarshalTokenRequest(
+    absl::string_view token_request);
+
+// This method takes in an ExtendedTokenRequest structure and encodes it into a
+// string.
+absl::StatusOr<std::string>  MarshalExtendedTokenRequest(
+    const ExtendedTokenRequest& extended_token_request);
+
+// This methods takes in an encoded ExtendedTokenRequest and decodes it into a
+// ExtendedTokenRequest struct.
+absl::StatusOr<ExtendedTokenRequest> 
+UnmarshalExtendedTokenRequest(absl::string_view extended_token_request);
 
 }  // namespace anonymous_tokens
 

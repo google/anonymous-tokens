@@ -415,6 +415,39 @@ TEST(AnonymousTokensDebugMode, InvalidMode) {
   EXPECT_FALSE(DebugMode::FromExtension(ext).ok());
 }
 
+TEST(AnonymousTokensProxyLayer, RoundTripProxyA) {
+  ProxyLayer pl{.layer = ProxyLayer::kProxyA};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, pl.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF003);
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ProxyLayer pl2,
+                                   ProxyLayer::FromExtension(ext));
+  EXPECT_EQ(pl.layer, pl2.layer);
+}
+
+TEST(AnonymousTokensProxyLayer, RoundTripProxyB) {
+  ProxyLayer pl{.layer = ProxyLayer::kProxyB};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, pl.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF003);
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ProxyLayer pl2,
+                                   ProxyLayer::FromExtension(ext));
+  EXPECT_EQ(pl.layer, pl2.layer);
+}
+
+TEST(AnonymousTokensProxyLayer, WrongExtId) {
+  ProxyLayer pl{.layer = ProxyLayer::kProxyA};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, pl.AsExtension());
+  ext.extension_type = 0xF004;
+  EXPECT_FALSE(ProxyLayer::FromExtension(ext).ok());
+}
+
+TEST(AnonymousTokensProxyLayer, InvalidLayer) {
+  ProxyLayer pl{.layer = ProxyLayer::kProxyA};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, pl.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF003);
+  ext.extension_value = std::string("~");
+  EXPECT_FALSE(ProxyLayer::FromExtension(ext).ok());
+}
+
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      EmptyMarshalTokenChallengeTest) {
   TokenChallenge token_challenge;
@@ -436,6 +469,222 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, MarshalTokenChallengeTest) {
       absl::HexStringToBytes("da7a00116973737565722e676f6f676c652e636f6d");
 
   EXPECT_EQ(encoded_token, expected_token_encoding);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     UnMarshalTokenRequestWrongTokenType) {
+  std::string token_request_encoding = absl::HexStringToBytes(
+      "1234124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652e");
+  absl::StatusOr<TokenRequest> token_request =
+      UnmarshalTokenRequest(token_request_encoding);
+
+  EXPECT_EQ(token_request.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(token_request.status().message(),
+              ::testing::HasSubstr("unsupported token type"));
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     UnMarshalTokenRequestBlindedRequestTooShort) {
+  std::string token_request_encoding = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000"
+      "a");
+  absl::StatusOr<TokenRequest> token_request =
+      UnmarshalTokenRequest(token_request_encoding);
+
+  EXPECT_EQ(token_request.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(token_request.status().message(),
+              ::testing::HasSubstr("failed to read blinded_token_request"));
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     UnMarshalTokenRequestBlindedRequestTooLong) {
+  std::string token_request_encoding = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652ea5cc6f2c4143474e458c8d2ca8e9aa");
+  absl::StatusOr<TokenRequest> token_request =
+      UnmarshalTokenRequest(token_request_encoding);
+
+  EXPECT_EQ(token_request.status().code(), absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(token_request.status().message(),
+              ::testing::HasSubstr("token request had extra bytes"));
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     MarshalAndUnmarshalTokenRequest) {
+  TokenRequest token_request{
+      .token_type = 0xDA7A,
+      .truncated_token_key_id = 0x12,
+      .blinded_token_request = absl::HexStringToBytes(
+          "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d056056"
+          "86200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427"
+          "bbae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087"
+          "c0e881f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9"
+          "321b0826d59402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6ef"
+          "b54e76a5a8056f5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e"
+          "36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f"
+          "01d90e0d2d784874ff000ae105483941652e")};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token_request,
+                                   MarshalTokenRequest(token_request));
+
+  std::string expected_token_request_encoding = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652e");
+
+  EXPECT_EQ(encoded_token_request, expected_token_request_encoding);
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      TokenRequest decoded_token_request,
+      UnmarshalTokenRequest(encoded_token_request));
+
+  EXPECT_EQ(decoded_token_request.token_type, token_request.token_type);
+  EXPECT_EQ(decoded_token_request.truncated_token_key_id,
+            token_request.truncated_token_key_id);
+  EXPECT_EQ(decoded_token_request.blinded_token_request,
+            token_request.blinded_token_request);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     UnmarshalExtendedTokenRequestTooShort) {
+  std::string extended_token_request_encoding_1 = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652");
+  std::string extended_token_request_encoding_2 = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652e");
+
+  absl::StatusOr<ExtendedTokenRequest> decoded_extended_token_request_1 =
+      UnmarshalExtendedTokenRequest(extended_token_request_encoding_1);
+  absl::StatusOr<ExtendedTokenRequest> decoded_extended_token_request_2 =
+      UnmarshalExtendedTokenRequest(extended_token_request_encoding_2);
+
+  EXPECT_EQ(decoded_extended_token_request_1.status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(decoded_extended_token_request_1.status().message(),
+              ::testing::HasSubstr("failed to read encoded_token_request"));
+  EXPECT_EQ(decoded_extended_token_request_2.status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(decoded_extended_token_request_2.status().message(),
+              ::testing::HasSubstr("failed to read extensions."));
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     UnmarshalExtendedTokenRequestTooLong) {
+  std::string extended_token_request_encoding = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652e000b0001000101000200020202DA");
+
+  absl::StatusOr<ExtendedTokenRequest> decoded_extended_token_request =
+      UnmarshalExtendedTokenRequest(extended_token_request_encoding);
+
+  EXPECT_EQ(decoded_extended_token_request.status().code(),
+            absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(decoded_extended_token_request.status().message(),
+              ::testing::HasSubstr("no data after extensions is allowed"));
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     MarshalAndUnmarshalExtendedTokenRequest) {
+  TokenRequest token_request{
+      .token_type = 0xDA7A,
+      .truncated_token_key_id = 0x12,
+      .blinded_token_request = absl::HexStringToBytes(
+          "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d056056"
+          "86200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427"
+          "bbae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087"
+          "c0e881f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9"
+          "321b0826d59402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6ef"
+          "b54e76a5a8056f5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e"
+          "36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f"
+          "01d90e0d2d784874ff000ae105483941652e")};
+  Extensions extensions;
+  extensions.extensions.push_back(
+      Extension{/*extension_type=*/0x0001,
+                /*extension_value=*/absl::HexStringToBytes("01")});
+  extensions.extensions.push_back(
+      Extension{/*extension_type=*/0x0002,
+                /*extension_value=*/absl::HexStringToBytes("0202")});
+  ExtendedTokenRequest extended_token_request{token_request, extensions};
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::string encoded_extended_token_request,
+      MarshalExtendedTokenRequest(extended_token_request));
+
+  std::string expected_extended_token_request_encoding = absl::HexStringToBytes(
+      "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
+      "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
+      "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
+      "f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d5"
+      "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
+      "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
+      "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
+      "e105483941652e000b0001000101000200020202");
+
+  EXPECT_EQ(encoded_extended_token_request,
+            expected_extended_token_request_encoding);
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      ExtendedTokenRequest decoded_extended_token_request,
+      UnmarshalExtendedTokenRequest(encoded_extended_token_request));
+
+  EXPECT_EQ(decoded_extended_token_request.request.token_type,
+            token_request.token_type);
+  EXPECT_EQ(decoded_extended_token_request.request.truncated_token_key_id,
+            token_request.truncated_token_key_id);
+  EXPECT_EQ(decoded_extended_token_request.request.blinded_token_request,
+            token_request.blinded_token_request);
+  EXPECT_EQ(decoded_extended_token_request.extensions.extensions.size(),
+            extensions.extensions.size());
+  for (int i = 0; i < extensions.extensions.size(); ++i) {
+    EXPECT_EQ(
+        decoded_extended_token_request.extensions.extensions[i].extension_type,
+        extensions.extensions[i].extension_type);
+    EXPECT_EQ(
+        decoded_extended_token_request.extensions.extensions[i].extension_value,
+        extensions.extensions[i].extension_value);
+  }
 }
 
 }  // namespace
