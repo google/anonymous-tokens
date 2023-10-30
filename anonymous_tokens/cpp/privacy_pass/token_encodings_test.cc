@@ -14,12 +14,18 @@
 
 #include "anonymous_tokens/cpp/privacy_pass/token_encodings.h"
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
 
 
@@ -685,6 +691,96 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
         decoded_extended_token_request.extensions.extensions[i].extension_value,
         extensions.extensions[i].extension_value);
   }
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     ValidateExtensionsValuesTest) {
+  Extensions extensions;
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  ExpirationTimestamp et;
+  absl::Time one_day_away = absl::Now() + absl::Hours(24);
+  et.timestamp = absl::ToUnixSeconds(one_day_away);
+  et.timestamp -= et.timestamp % 900;
+  et.timestamp_precision = 900;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, et.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  GeoHint gh;
+  gh.geo_hint = "US,US-AL,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, gh.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  ServiceType svc;
+  svc.service_type_id = ServiceType::kChromeIpBlinding;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, svc.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  DebugMode debug;
+  debug.mode = DebugMode::kDebug;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, debug.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  ProxyLayer proxy_layer;
+  proxy_layer.layer = ProxyLayer::kProxyA;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, proxy_layer.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  GeoHint bad_ext;
+  bad_ext.geo_hint = "USA,US-AL,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, bad_ext.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_FALSE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     ValidateExtensionsOrderAndValuesTest) {
+  Extensions extensions;
+  std::vector<uint16_t> expected_types;
+  EXPECT_TRUE(ValidateExtensionsOrderAndValues(
+                  extensions, absl::MakeSpan(expected_types), absl::Now())
+                  .ok());
+
+  ExpirationTimestamp et;
+  absl::Time one_day_away = absl::Now() + absl::Hours(24);
+  et.timestamp = absl::ToUnixSeconds(one_day_away);
+  et.timestamp -= et.timestamp % 900;
+  et.timestamp_precision = 900;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, et.AsExtension());
+  extensions.extensions.push_back(ext);
+  expected_types.push_back(0x0001);
+  EXPECT_TRUE(ValidateExtensionsOrderAndValues(
+                  extensions, absl::MakeSpan(expected_types), absl::Now())
+                  .ok());
+
+  expected_types.push_back(0x0002);
+  EXPECT_FALSE(ValidateExtensionsOrderAndValues(
+                   extensions, absl::MakeSpan(expected_types), absl::Now())
+                   .ok());
+
+  GeoHint gh;
+  gh.geo_hint = "US,US-AL,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, gh.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_TRUE(ValidateExtensionsOrderAndValues(
+                  extensions, absl::MakeSpan(expected_types), absl::Now())
+                  .ok());
+
+  expected_types.clear();
+  EXPECT_FALSE(ValidateExtensionsOrderAndValues(
+                   extensions, absl::MakeSpan(expected_types), absl::Now())
+                   .ok());
+
+  expected_types.push_back(0x0002);
+  expected_types.push_back(0x0001);
+  EXPECT_FALSE(ValidateExtensionsOrderAndValues(
+                   extensions, absl::MakeSpan(expected_types), absl::Now())
+                   .ok());
 }
 
 }  // namespace

@@ -18,8 +18,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <ios>
-#include <limits>
 #include <optional>
 #include <string>
 
@@ -27,7 +25,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
 #include <openssl/base.h>
 #include <openssl/bytestring.h>
@@ -665,6 +666,101 @@ absl::StatusOr<ExtendedTokenRequest> UnmarshalExtendedTokenRequest(
   ANON_TOKENS_ASSIGN_OR_RETURN(out.extensions,
                                DecodeExtensions(encoded_extensions));
   return out;
+}
+
+absl::Status ValidateExtensionsOrderAndValues(
+    const Extensions& extensions, absl::Span<uint16_t> expected_types,
+    absl::Time now) {
+  if (expected_types.size() != extensions.extensions.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Expected %d type, got %d", expected_types.size(),
+                        extensions.extensions.size()));
+  }
+  for (int i = 0; i < expected_types.size(); i++) {
+    if (expected_types[i] != extensions.extensions[i].extension_type) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "Expected %x type at index %d, got %x", expected_types[i], i,
+          extensions.extensions[i].extension_type));
+    }
+  }
+  return ValidateExtensionsValues(extensions, now);
+}
+
+absl::Status ValidateExtensionsValues(const Extensions& extensions,
+                                      absl::Time now) {
+  for (const Extension& ext : extensions.extensions) {
+    switch (ext.extension_type) {
+      case 0x0001: {
+        absl::StatusOr<ExpirationTimestamp> expiration_timestamp =
+            ExpirationTimestamp::FromExtension(ext);
+        if (!expiration_timestamp.ok()) {
+          return expiration_timestamp.status();
+        }
+        if (expiration_timestamp->timestamp % kFifteenMinutesInSeconds != 0) {
+          return absl::InvalidArgumentError(
+              "Expiration timestamp is not rounded");
+        }
+        absl::Time timestamp =
+            absl::FromUnixSeconds(expiration_timestamp->timestamp);
+        if (timestamp < now || timestamp > now + absl::Hours(kOneWeekToHours)) {
+          return absl::InvalidArgumentError(
+              "Expiration timestamp is out of range");
+        }
+        break;
+      }
+      case 0x0002: {
+        absl::StatusOr<GeoHint> geo_hint = GeoHint::FromExtension(ext);
+        if (!geo_hint.ok()) {
+          return geo_hint.status();
+        }
+        if (geo_hint->country_code.length() != kAlpha2CountryCodeLength) {
+          return absl::InvalidArgumentError("Country code is not 2 characters");
+        }
+        for (const char& c : geo_hint->country_code) {
+          if (!absl::ascii_isupper(c)) {
+            return absl::InvalidArgumentError("Country code is not uppercase");
+          }
+        }
+        for (const char& c : geo_hint->region) {
+          if (!absl::ascii_isupper(c) && !absl::ascii_ispunct(c)) {
+            return absl::InvalidArgumentError("Region is not uppercase");
+          }
+        }
+        for (const char& c : geo_hint->city) {
+          if (!absl::ascii_isupper(c)) {
+            return absl::InvalidArgumentError("City is not uppercase");
+          }
+        }
+        break;
+      }
+      case 0xF001: {
+        absl::StatusOr<ServiceType> service_type =
+            ServiceType::FromExtension(ext);
+        if (!service_type.ok()) {
+          return service_type.status();
+        }
+        break;
+      }
+      case 0xF002: {
+        absl::StatusOr<DebugMode> debug_mode = DebugMode::FromExtension(ext);
+        if (!debug_mode.ok()) {
+          return debug_mode.status();
+        }
+        break;
+      }
+      case 0xF003: {
+        absl::StatusOr<ProxyLayer> proxy_layer = ProxyLayer::FromExtension(ext);
+        if (!proxy_layer.ok()) {
+          return proxy_layer.status();
+        }
+        break;
+      }
+      default: {
+        return absl::InvalidArgumentError("Unsupported extension type");
+      }
+    }
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace anonymous_tokens
