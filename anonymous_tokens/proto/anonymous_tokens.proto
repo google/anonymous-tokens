@@ -22,7 +22,7 @@ message Timestamp {
 }
 
 // Different use cases for the Anonymous Tokens service.
-// Next ID: 10
+// Next ID: 11
 enum AnonymousTokensUseCase {
   // Test use cases here.
   ANONYMOUS_TOKENS_USE_CASE_UNDEFINED = 0;
@@ -36,6 +36,7 @@ enum AnonymousTokensUseCase {
   PROVABLY_PRIVATE_NETWORK = 3;
   CHROME_IP_BLINDING = 7;
   NOCTOGRAM_PPISSUER = 8;
+  CHROME_IP_BLINDING_DARKLAUNCH = 10;
 }
 
 // An enum describing different types of available hash functions.

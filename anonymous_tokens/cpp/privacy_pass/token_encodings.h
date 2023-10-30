@@ -17,11 +17,13 @@
 
 #include <stdint.h>
 
-#include <optional>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
 
 namespace anonymous_tokens {
 
@@ -30,6 +32,14 @@ constexpr int kDA7ABlindedTokenRequestSizeInBytes = 256;
 
 // TokenRequest struct will be encoded in 259 bytes for token type DA7A.
 constexpr int kDA7AMarshaledTokenRequestSizeInBytes = 259;
+
+// Timestamp precision must be at least 15 minutes.
+constexpr int kFifteenMinutesInSeconds = 900;
+
+// Timestamp must expire within the next week.
+constexpr int kOneWeekToHours = 168;
+
+constexpr int kAlpha2CountryCodeLength = 2;
 
 // TokenRequest contains the blinded_token_request along with the token type
 // represented using two bytes and the truncated_token_key_id which is the last
@@ -243,6 +253,17 @@ absl::StatusOr<std::string>  MarshalExtendedTokenRequest(
 // ExtendedTokenRequest struct.
 absl::StatusOr<ExtendedTokenRequest> 
 UnmarshalExtendedTokenRequest(absl::string_view extended_token_request);
+
+// This method takes in an Extensions struct, checks that the ordering matches
+// the given ordering in expected_types, and validates extension values.
+absl::Status ValidateExtensionsOrderAndValues(
+    const Extensions& extensions, absl::Span<uint16_t> expected_types,
+    absl::Time now);
+
+// This method takes in an Extensions struct and validates extension values by
+// converting them to structs.
+absl::Status ValidateExtensionsValues(const Extensions& extensions,
+                                      absl::Time now);
 
 }  // namespace anonymous_tokens
 
