@@ -15,7 +15,6 @@
 #ifndef ANONYMOUS_TOKENS_CPP_SHARED_PROTO_UTILS_H_
 #define ANONYMOUS_TOKENS_CPP_SHARED_PROTO_UTILS_H_
 
-
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"

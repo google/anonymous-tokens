@@ -25,7 +25,6 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 
-
 namespace anonymous_tokens {
 
 // blinded_token_request will be encoded in 256 bytes for token type DA7A.
