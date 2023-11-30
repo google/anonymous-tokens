@@ -28,8 +28,6 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
-
-
 #include <openssl/base.h>
 #include <openssl/bn.h>
 #include <openssl/rsa.h>

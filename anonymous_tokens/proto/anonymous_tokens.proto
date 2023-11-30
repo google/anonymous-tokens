@@ -188,7 +188,7 @@ message AnonymousTokensSignRequest {
 
     // Public metadata to be tied to the `blinded message` (serialized_token).
     //
-    // The length of public metadata must fit in 4 bytes.
+    // The length of public metadata must be at most 2^32 bytes.
     bytes public_metadata = 4;
 
     // This value is disregarded for standard blind RSA signatures.

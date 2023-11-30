@@ -27,7 +27,6 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
-
 namespace anonymous_tokens {
 
 // This class generates AnonymousTokens RSA blind signatures,
@@ -38,7 +37,7 @@ namespace anonymous_tokens {
 // a new instance of the AnonymousTokensRsaBssaClient.
 //
 // This class is not thread-safe.
-class  AnonymousTokensRsaBssaClient {
+class AnonymousTokensRsaBssaClient {
  public:
   // AnonymousTokensRsaBssaClient is neither copyable nor copy assignable.
   AnonymousTokensRsaBssaClient(const AnonymousTokensRsaBssaClient&) = delete;

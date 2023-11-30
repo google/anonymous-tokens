@@ -26,10 +26,9 @@
 #include <openssl/base.h>
 
 
-
 namespace anonymous_tokens {
 
-class  PrivacyPassRsaBssaPublicMetadataClient {
+class PrivacyPassRsaBssaPublicMetadataClient {
  public:
   #ifndef SWIG
   // PrivacyPassRsaBssaPublicMetadataClient is neither copyable nor copy
