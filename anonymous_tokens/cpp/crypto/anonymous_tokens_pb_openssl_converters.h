@@ -22,31 +22,30 @@
 #include <openssl/base.h>
 
 
-
 namespace anonymous_tokens {
 
 // Generate a message mask. For more details, see
 // https://datatracker.ietf.org/doc/draft-irtf-cfrg-rsa-blind-signatures/
-absl::StatusOr<std::string>  GenerateMask(
+absl::StatusOr<std::string> GenerateMask(
     const RSABlindSignaturePublicKey& public_key);
 
 // Converts the AnonymousTokens proto hash type to the equivalent EVP digest.
-absl::StatusOr<const EVP_MD*> 
+absl::StatusOr<const EVP_MD*>
 ProtoHashTypeToEVPDigest(HashType hash_type);
 
 // Converts the AnonymousTokens proto hash type for mask generation function to
 // the equivalent EVP digest.
-absl::StatusOr<const EVP_MD*> 
+absl::StatusOr<const EVP_MD*>
 ProtoMaskGenFunctionToEVPDigest(MaskGenFunction mgf);
 
 // Converts AnonymousTokens::RSAPrivateKey to bssl::UniquePtr<RSA> without
 // public metadata augmentation.
-absl::StatusOr<bssl::UniquePtr<RSA>> 
+absl::StatusOr<bssl::UniquePtr<RSA>>
 AnonymousTokensRSAPrivateKeyToRSA(const RSAPrivateKey& private_key);
 
 // Converts AnonymousTokens::RSAPublicKey to bssl::UniquePtr<RSA> without
 // public metadata augmentation.
-absl::StatusOr<bssl::UniquePtr<RSA>> 
+absl::StatusOr<bssl::UniquePtr<RSA>>
 AnonymousTokensRSAPublicKeyToRSA(const RSAPublicKey& public_key);
 
 }  // namespace anonymous_tokens

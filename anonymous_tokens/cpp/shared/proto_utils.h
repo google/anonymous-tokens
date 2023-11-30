@@ -22,25 +22,24 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
-
 namespace anonymous_tokens {
 
 // Returns AnonymousTokensUseCase parsed from a string_view.
-absl::StatusOr<AnonymousTokensUseCase>  ParseUseCase(
+absl::StatusOr<AnonymousTokensUseCase> ParseUseCase(
     absl::string_view use_case);
 
 // Takes in Timestamp and converts it to absl::Time.
 //
 // Timestamp is defined here:
 // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#timestamp
-absl::StatusOr<absl::Time>  TimeFromProto(
+absl::StatusOr<absl::Time> TimeFromProto(
     const Timestamp& proto);
 
 // Takes in absl::Time and converts it to Timestamp.
 //
 // Timestamp is defined here:
 // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#timestamp
-absl::StatusOr<Timestamp>  TimeToProto(
+absl::StatusOr<Timestamp> TimeToProto(
     absl::Time time);
 
 }  // namespace anonymous_tokens

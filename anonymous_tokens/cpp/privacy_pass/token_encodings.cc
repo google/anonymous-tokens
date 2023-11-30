@@ -123,7 +123,7 @@ absl::StatusOr<std::string> MarshalToken(const Token& token) {
                                  token.authenticator);
 }
 
-absl::StatusOr<Token>  UnmarshalToken(std::string token) {
+absl::StatusOr<Token> UnmarshalToken(std::string token) {
   Token out;
   out.nonce.resize(32);
   out.context.resize(32);
@@ -467,7 +467,7 @@ absl::StatusOr<ProxyLayer> ProxyLayer::FromExtension(const Extension& ext) {
   return pl;
 }
 
-absl::StatusOr<Extensions>  DecodeExtensions(
+absl::StatusOr<Extensions> DecodeExtensions(
     absl::string_view encoded_extensions) {
   CBS cbs;
   CBS_init(&cbs, reinterpret_cast<const uint8_t*>(encoded_extensions.data()),
@@ -724,11 +724,6 @@ absl::Status ValidateExtensionsValues(const Extensions& extensions,
         for (const char& c : geo_hint->region) {
           if (!absl::ascii_isupper(c) && !absl::ascii_ispunct(c)) {
             return absl::InvalidArgumentError("Region is not uppercase");
-          }
-        }
-        for (const char& c : geo_hint->city) {
-          if (!absl::ascii_isupper(c)) {
-            return absl::InvalidArgumentError("City is not uppercase");
           }
         }
         break;

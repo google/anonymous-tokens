@@ -28,12 +28,11 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
 
-
 namespace anonymous_tokens {
 
 // RsaSsaPssVerifier is able to verify an unblinded token (signature) against an
 // inputted message using a public key and other input parameters.
-class  RsaSsaPssVerifier : public Verifier {
+class RsaSsaPssVerifier : public Verifier {
  public:
   // Passing of public_metadata is optional. If it is set to any value including
   // an empty string, RsaSsaPssVerifier will assume that partially blind RSA
