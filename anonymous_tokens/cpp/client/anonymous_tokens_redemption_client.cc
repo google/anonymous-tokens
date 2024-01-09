@@ -22,7 +22,6 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 AnonymousTokensRedemptionClient::AnonymousTokensRedemptionClient(
@@ -195,4 +194,3 @@ AnonymousTokensRedemptionClient::ProcessAnonymousTokensRedemptionResponse(
 }
 
 }  // namespace anonymous_tokens
-

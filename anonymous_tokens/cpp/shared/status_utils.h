@@ -18,7 +18,6 @@
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
 
-
 namespace anonymous_tokens {
 
 #define _ANON_TOKENS_STATUS_MACROS_CONCAT_NAME(x, y) \
@@ -44,6 +43,5 @@ namespace anonymous_tokens {
   } while (0)
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_SHARED_STATUS_UTILS_H_

@@ -19,7 +19,6 @@
 
 #include "absl/status/statusor.h"
 
-
 namespace anonymous_tokens {
 
 class Blinder {
@@ -34,5 +33,4 @@ class Blinder {
 };
 
 }  // namespace anonymous_tokens
-
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_BLINDER_H_

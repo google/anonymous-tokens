@@ -26,7 +26,6 @@
 #include "anonymous_tokens/cpp/crypto/rsa_blinder.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 // This class generates AnonymousTokens RSA blind signatures,
@@ -94,6 +93,5 @@ class AnonymousTokensRsaBssaClient {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CLIENT_ANONYMOUS_TOKENS_RSA_BSSA_CLIENT_H_

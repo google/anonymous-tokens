@@ -28,7 +28,6 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 // Internal functions only exposed for testing.
@@ -219,6 +218,5 @@ absl::StatusOr<std::string> RsaSsaPssPublicKeyToDerEncoding(
     const RSA* rsa);
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_CRYPTO_UTILS_H_

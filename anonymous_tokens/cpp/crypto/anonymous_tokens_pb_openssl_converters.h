@@ -21,7 +21,6 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/base.h>
 
-
 namespace anonymous_tokens {
 
 // Generate a message mask. For more details, see
@@ -49,6 +48,5 @@ absl::StatusOr<bssl::UniquePtr<RSA>>
 AnonymousTokensRSAPublicKeyToRSA(const RSAPublicKey& public_key);
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_ANONYMOUS_TOKENS_PB_OPENSSL_CONVERTERS_H_

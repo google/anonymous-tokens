@@ -26,7 +26,6 @@
 #include <openssl/base.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 namespace {
 
@@ -540,4 +539,3 @@ INSTANTIATE_TEST_SUITE_P(CryptoUtilsTest, CryptoUtilsTest,
 
 }  // namespace
 }  // namespace anonymous_tokens
-

@@ -25,7 +25,6 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/base.h>
 
-
 namespace anonymous_tokens {
 
 // Creates a pair containing a standard RSA Private key and an Anonymous Tokens
@@ -83,6 +82,5 @@ absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>
 GetIetfRsaBlindSignatureWithPublicMetadataTestKeys();
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_TESTING_PROTO_UTILS_H_

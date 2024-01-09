@@ -28,7 +28,6 @@
 #include <openssl/digest.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 namespace {
@@ -175,4 +174,3 @@ absl::Status PrivacyPassRsaBssaPublicMetadataClient::Verify(
 }
 
 }  // namespace anonymous_tokens
-

@@ -27,7 +27,6 @@
 #include "anonymous_tokens/cpp/crypto/verifier.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 // RsaSsaPssVerifier is able to verify an unblinded token (signature) against an
@@ -73,6 +72,5 @@ class RsaSsaPssVerifier : public Verifier {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_RSA_SSA_PSS_VERIFIER_H_

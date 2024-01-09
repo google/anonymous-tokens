@@ -29,7 +29,6 @@
 #include <openssl/digest.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 absl::StatusOr<std::unique_ptr<RsaBlinder>> RsaBlinder::New(
@@ -257,4 +256,3 @@ absl::Status RsaBlinder::Verify(absl::string_view signature,
 }
 
 }  // namespace anonymous_tokens
-

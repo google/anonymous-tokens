@@ -24,7 +24,6 @@
 #include "absl/status/statusor.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 // This class generates AnonymousTokens Redemption request using the anonymous
@@ -81,6 +80,5 @@ class AnonymousTokensRedemptionClient {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CLIENT_ANONYMOUS_TOKENS_REDEMPTION_CLIENT_H_

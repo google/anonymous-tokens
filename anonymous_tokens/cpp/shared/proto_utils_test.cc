@@ -14,7 +14,6 @@
 
 #include "anonymous_tokens/cpp/shared/proto_utils.h"
 
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
@@ -22,7 +21,6 @@
 #include "absl/time/time.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
-
 
 namespace anonymous_tokens {
 namespace {
@@ -90,4 +88,3 @@ TEST(ProtoUtilsTest, TimeToProtoBad) {
 
 }  // namespace
 }  // namespace anonymous_tokens
-

@@ -28,7 +28,6 @@
 #include "absl/types/span.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
 
-
 namespace anonymous_tokens {
 namespace {
 
@@ -730,12 +729,83 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, proxy_layer.AsExtension());
   extensions.extensions.push_back(ext);
   EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+}
 
-  GeoHint bad_ext;
-  bad_ext.geo_hint = "USA,US-AL,ALABASTER";
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(ext, bad_ext.AsExtension());
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     NotRoundedExpirationExtensionValidationTest) {
+  Extensions extensions;
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  ExpirationTimestamp et;
+  absl::Time one_day_away = absl::Now() + absl::Hours(24);
+  et.timestamp = absl::ToUnixSeconds(one_day_away);
+  et.timestamp -= et.timestamp % 900;
+  et.timestamp += 17;
+  et.timestamp_precision = 900;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, et.AsExtension());
   extensions.extensions.push_back(ext);
-  EXPECT_FALSE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+  EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     BadPrecisionExpirationExtensionValidationTest) {
+  Extensions extensions;
+  EXPECT_TRUE(ValidateExtensionsValues(extensions, absl::Now()).ok());
+
+  ExpirationTimestamp et;
+  absl::Time one_day_away = absl::Now() + absl::Hours(24);
+  et.timestamp = absl::ToUnixSeconds(one_day_away);
+  et.timestamp -= et.timestamp % 2;
+  et.timestamp_precision = 2;
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, et.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
+            absl::StatusCode::kInvalidArgument);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     MissingCountryGeoHintExtensionValidationTest) {
+  Extensions extensions;
+  GeoHint gh;
+  gh.geo_hint = "US-AL,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
+              absl::StatusCode::kInvalidArgument);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     CountryLowercaseGeoHintExtensionValidationTest) {
+  Extensions extensions;
+  GeoHint gh;
+  gh.geo_hint = "us,US-AL,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
+              absl::StatusCode::kInvalidArgument);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     NotCountryCodeGeoHintExtensionValidationTest) {
+  Extensions extensions;
+  GeoHint gh;
+  gh.geo_hint = "USA,US-AL,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
+              absl::StatusCode::kInvalidArgument);
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     RegionLowercaseGeoHintExtensionValidationTest) {
+  Extensions extensions;
+  GeoHint gh;
+  gh.geo_hint = "US,US-al,ALABASTER";
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
+  extensions.extensions.push_back(ext);
+  EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
+              absl::StatusCode::kInvalidArgument);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
@@ -785,4 +855,3 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 }  // namespace
 }  // namespace anonymous_tokens
-

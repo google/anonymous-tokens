@@ -20,7 +20,6 @@
 #include "absl/time/time.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 // Returns AnonymousTokensUseCase parsed from a string_view.
@@ -42,6 +41,5 @@ absl::StatusOr<Timestamp> TimeToProto(
     absl::Time time);
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_SHARED_PROTO_UTILS_H_

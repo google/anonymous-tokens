@@ -37,7 +37,6 @@
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 namespace internal {
@@ -614,4 +613,3 @@ absl::StatusOr<std::string> RsaSsaPssPublicKeyToDerEncoding(const RSA* rsa) {
 }
 
 }  // namespace anonymous_tokens
-

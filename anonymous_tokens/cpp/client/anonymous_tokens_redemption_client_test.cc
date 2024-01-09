@@ -26,7 +26,6 @@
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 namespace {
 
