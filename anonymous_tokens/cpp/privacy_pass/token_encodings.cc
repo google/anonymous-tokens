@@ -34,7 +34,6 @@
 #include <openssl/bytestring.h>
 #include <openssl/mem.h>
 
-
 namespace anonymous_tokens {
 
 namespace {
@@ -759,4 +758,3 @@ absl::Status ValidateExtensionsValues(const Extensions& extensions,
 }
 
 }  // namespace anonymous_tokens
-

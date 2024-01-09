@@ -25,7 +25,6 @@
 #include "absl/types/optional.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 // This class generates AnonymousTokens Public Key(s) Get request and processes
@@ -81,6 +80,5 @@ class AnonymousTokensPublicKeysGetClient {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CLIENT_ANONYMOUS_TOKENS_PUBLIC_KEY_CLIENT_H_

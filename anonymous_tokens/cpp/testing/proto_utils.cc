@@ -35,7 +35,6 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 namespace {
@@ -290,4 +289,3 @@ GetIetfRsaBlindSignatureWithPublicMetadataTestKeys() {
 }
 
 }  // namespace anonymous_tokens
-

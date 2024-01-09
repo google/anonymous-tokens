@@ -20,7 +20,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 
-
 namespace anonymous_tokens {
 
 class BlindSigner {
@@ -32,6 +31,5 @@ class BlindSigner {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_BLIND_SIGNER_H_

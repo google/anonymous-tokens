@@ -26,7 +26,6 @@
 #include <openssl/digest.h>
 #include <openssl/rand.h>
 
-
 namespace anonymous_tokens {
 
 absl::StatusOr<std::string> GenerateMask(
@@ -87,4 +86,3 @@ absl::StatusOr<bssl::UniquePtr<RSA>> AnonymousTokensRSAPublicKeyToRSA(
 }
 
 }  // namespace anonymous_tokens
-

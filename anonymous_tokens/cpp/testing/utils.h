@@ -23,7 +23,6 @@
 #include "absl/strings/string_view.h"
 #include <openssl/base.h>
 
-
 namespace anonymous_tokens {
 
 struct TestRsaPublicKey {
@@ -134,6 +133,5 @@ std::string RandomString(int n, std::uniform_int_distribution<int>* distr_u8,
   ANON_TOKENS_STATUS_TESTING_IMPL_CONCAT_INNER_(x, y)
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_TESTING_UTILS_H_

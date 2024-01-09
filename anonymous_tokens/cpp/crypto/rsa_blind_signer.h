@@ -24,7 +24,6 @@
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 // The RSA SSA (Signature Schemes with Appendix) using PSS (Probabilistic
@@ -68,6 +67,5 @@ class RsaBlindSigner : public BlindSigner {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_RSA_BLIND_SIGNER_H_

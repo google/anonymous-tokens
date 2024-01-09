@@ -26,7 +26,6 @@
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include <openssl/digest.h>
 
-
 namespace anonymous_tokens {
 namespace {
 

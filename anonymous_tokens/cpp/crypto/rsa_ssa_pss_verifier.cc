@@ -33,7 +33,6 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 absl::StatusOr<std::unique_ptr<RsaSsaPssVerifier>> RsaSsaPssVerifier::New(
@@ -83,4 +82,3 @@ absl::Status RsaSsaPssVerifier::Verify(absl::string_view unblind_token,
 }
 
 }  // namespace anonymous_tokens
-

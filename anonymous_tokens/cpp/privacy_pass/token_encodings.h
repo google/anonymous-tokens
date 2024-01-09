@@ -267,5 +267,4 @@ absl::Status ValidateExtensionsValues(const Extensions& extensions,
 
 }  // namespace anonymous_tokens
 
-
 #endif  // ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_TOKEN_ENCODINGS_H_

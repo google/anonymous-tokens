@@ -32,7 +32,6 @@
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 namespace {
 
@@ -186,4 +185,3 @@ absl::StatusOr<std::string> RsaBlindSigner::Sign(
 }
 
 }  // namespace anonymous_tokens
-

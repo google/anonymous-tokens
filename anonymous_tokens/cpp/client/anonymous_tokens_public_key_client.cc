@@ -27,7 +27,6 @@
 #include "anonymous_tokens/cpp/shared/status_utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 namespace {
@@ -241,4 +240,3 @@ AnonymousTokensPublicKeysGetClient::
 }
 
 }  // namespace anonymous_tokens
-

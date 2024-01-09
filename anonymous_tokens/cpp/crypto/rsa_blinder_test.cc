@@ -30,7 +30,6 @@
 #include <openssl/digest.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 namespace {
 
@@ -441,4 +440,3 @@ INSTANTIATE_TEST_SUITE_P(
 
 }  // namespace
 }  // namespace anonymous_tokens
-

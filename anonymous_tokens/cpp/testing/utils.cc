@@ -32,7 +32,6 @@
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 
-
 namespace anonymous_tokens {
 
 absl::StatusOr<std::string> TestSign(const absl::string_view blinded_data,
@@ -1042,4 +1041,3 @@ GetStrongTestRsaKeyPair4096() {
 }
 
 }  // namespace anonymous_tokens
-

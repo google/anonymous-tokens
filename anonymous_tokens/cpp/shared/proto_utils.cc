@@ -66,4 +66,3 @@ absl::StatusOr<Timestamp> TimeToProto(absl::Time time) {
 }
 
 }  // namespace anonymous_tokens
-

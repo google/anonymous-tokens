@@ -30,7 +30,6 @@
 #include "anonymous_tokens/cpp/shared/status_utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
-
 namespace anonymous_tokens {
 
 namespace {
@@ -87,25 +86,6 @@ absl::Status ValidityChecksForClientCreation(
   return absl::OkStatus();
 }
 
-absl::Status CheckPublicKeyValidity(
-    const RSABlindSignaturePublicKey& public_key) {
-  absl::Time time_now = absl::Now();
-  ANON_TOKENS_ASSIGN_OR_RETURN(
-      absl::Time start_time,
-      TimeFromProto(public_key.key_validity_start_time()));
-  if (start_time > time_now) {
-    return absl::FailedPreconditionError("Key is not valid yet.");
-  }
-  if (public_key.has_expiration_time()) {
-    ANON_TOKENS_ASSIGN_OR_RETURN(absl::Time expiration_time,
-                                 TimeFromProto(public_key.expiration_time()));
-    if (expiration_time <= time_now) {
-      return absl::FailedPreconditionError("Key is already expired.");
-    }
-  }
-  return absl::OkStatus();
-}
-
 }  // namespace
 
 AnonymousTokensRsaBssaClient::AnonymousTokensRsaBssaClient(
@@ -129,7 +109,6 @@ AnonymousTokensRsaBssaClient::CreateRequest(
         "Blind signature request already created.");
   }
 
-  ANON_TOKENS_RETURN_IF_ERROR(CheckPublicKeyValidity(public_key_));
   RSAPublicKey rsa_public_key_proto;
   if (!rsa_public_key_proto.ParseFromString(
           public_key_.serialized_public_key())) {
@@ -291,4 +270,3 @@ absl::Status AnonymousTokensRsaBssaClient::Verify(
 }
 
 }  // namespace anonymous_tokens
-

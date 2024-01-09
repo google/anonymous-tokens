@@ -27,7 +27,6 @@
 #include "anonymous_tokens/cpp/crypto/blinder.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
 
-
 namespace anonymous_tokens {
 
 // RsaBlinder `blinds` input messages, and then unblinds them after they are
@@ -94,6 +93,5 @@ class RsaBlinder : public Blinder {
 };
 
 }  // namespace anonymous_tokens
-
 
 #endif  // ANONYMOUS_TOKENS_CPP_CRYPTO_RSA_BLINDER_H_
