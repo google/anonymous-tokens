@@ -147,7 +147,9 @@ absl::Status RunDemo() {
   std::string token_response_hex_str;
 
   std::cin >> token_response_hex_str;
-  token_response = absl::HexStringToBytes(token_response_hex_str);
+  if (!absl::HexStringToBytes(token_response_hex_str, &token_response)) {
+    return absl::InvalidArgumentError("Invalid token response.");
+  }
 
   // Finalize the token.
   absl::StatusOr<anonymous_tokens::Token> final_token =

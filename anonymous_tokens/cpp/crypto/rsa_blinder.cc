@@ -209,7 +209,7 @@ absl::StatusOr<std::string> RsaBlinder::Unblind(
     return absl::FailedPreconditionError(
         "RsaBlinder is in wrong state to unblind signature.");
   }
-  const int mod_size = BN_num_bytes(RSA_get0_n(rsa_public_key_.get()));
+  const unsigned int mod_size = BN_num_bytes(RSA_get0_n(rsa_public_key_.get()));
   // Parse the signed_blinded_data as BIGNUM.
   if (blind_signature.size() != mod_size) {
     return absl::InternalError(absl::StrCat(

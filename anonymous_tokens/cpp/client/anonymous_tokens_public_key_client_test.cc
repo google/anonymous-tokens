@@ -165,7 +165,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
           TEST_USE_CASE, 0, start_time_, end_time));
 
   EXPECT_EQ(request.use_case(), AnonymousTokensUseCase_Name(TEST_USE_CASE));
-  EXPECT_EQ(request.key_version(), 0);
+  EXPECT_EQ(request.key_version(), 0u);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       absl::Time request_start_time,
       TimeFromProto(request.key_validity_start_time()));
@@ -183,7 +183,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
                         TEST_USE_CASE, 0, start_time_, absl::nullopt));
 
   EXPECT_EQ(request.use_case(), AnonymousTokensUseCase_Name(TEST_USE_CASE));
-  EXPECT_EQ(request.key_version(), 0);
+  EXPECT_EQ(request.key_version(), 0u);
   EXPECT_EQ(TimeFromProto(request.key_validity_start_time()).value(),
             start_time_);
   EXPECT_EQ(request.has_key_validity_end_time(), false);
@@ -239,25 +239,6 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
   EXPECT_THAT(
       public_keys.status().message(),
       testing::HasSubstr("Public key is not for the Use Case requested."));
-}
-
-TEST_F(AnonymousTokensPublicKeysGetClientTest,
-       KeyVersionNegativeInPublicKeyGetResponse) {
-  ASSERT_TRUE(
-      client_
-          ->CreateAnonymousTokensPublicKeysGetRequest(
-              TEST_USE_CASE, 0, start_time_, start_time_ + absl::Minutes(100))
-          .ok());
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto response, SimpleGetResponse());
-
-  // Key version cannot be negative.
-  response.mutable_rsa_public_keys(0)->set_key_version(-10);
-
-  absl::StatusOr<std::vector<RSABlindSignaturePublicKey>> public_keys =
-      client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(response);
-  EXPECT_EQ(public_keys.status().code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_THAT(public_keys.status().message(),
-              testing::HasSubstr("Key_version cannot be zero or negative."));
 }
 
 TEST_F(AnonymousTokensPublicKeysGetClientTest,
@@ -645,10 +626,10 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest, ProcessPublicKeyGetResponse) {
       auto processed_single_key_resp,
       client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(single_key_resp));
 
-  ASSERT_EQ(processed_single_key_resp.size(), 1);
+  ASSERT_EQ(processed_single_key_resp.size(), 1u);
 
   EXPECT_EQ(processed_single_key_resp[0].use_case(), "TEST_USE_CASE");
-  EXPECT_EQ(processed_single_key_resp[0].key_version(), 1);
+  EXPECT_EQ(processed_single_key_resp[0].key_version(), 1u);
   EXPECT_EQ(processed_single_key_resp[0].key_size(), kKeyByteSize);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       absl::Time response_start_time,
@@ -686,10 +667,10 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
       auto processed_single_key_resp,
       client_->ProcessAnonymousTokensRSAPublicKeysGetResponse(single_key_resp));
 
-  ASSERT_EQ(processed_single_key_resp.size(), 1);
+  ASSERT_EQ(processed_single_key_resp.size(), 1u);
 
   EXPECT_EQ(processed_single_key_resp[0].use_case(), "TEST_USE_CASE");
-  EXPECT_EQ(processed_single_key_resp[0].key_version(), 1);
+  EXPECT_EQ(processed_single_key_resp[0].key_version(), 1u);
   EXPECT_EQ(processed_single_key_resp[0].key_size(), kKeyByteSize);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       absl::Time response_start_time,
@@ -714,14 +695,14 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
 
 TEST_F(AnonymousTokensPublicKeysGetClientTest,
        ProcessResponseContainingMultiplePublicKeys) {
-  int total_keys = 5;
+  size_t total_keys = 5;
   ASSERT_TRUE(client_
                   ->CreateAnonymousTokensPublicKeysGetRequest(
                       TEST_USE_CASE, 0, start_time_,
                       start_time_ + (kEndTimeIncrement * (total_keys + 1)))
                   .ok());
   std::vector<RSAPublicKey> public_keys(total_keys);
-  for (int i = 0; i < total_keys; ++i) {
+  for (size_t i = 0; i < total_keys; ++i) {
     public_keys[i] = GenerateFakeRsaKey(std::string(kKeyByteSize, 'a' + i),
                                         std::string(kKeyByteSize, 'b' + i));
   }
@@ -733,7 +714,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
 
   ASSERT_EQ(processed_multi_key_resp.size(), total_keys);
 
-  for (int i = 1; i < total_keys; ++i) {
+  for (size_t i = 1; i < total_keys; ++i) {
     EXPECT_EQ(processed_multi_key_resp[i].use_case(), "TEST_USE_CASE");
     EXPECT_EQ(processed_multi_key_resp[i].key_version(), i + 1);
     EXPECT_EQ(processed_multi_key_resp[i].key_size(), kKeyByteSize);
