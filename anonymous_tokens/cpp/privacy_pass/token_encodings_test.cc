@@ -147,7 +147,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooShort) {
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooLong) {
   std::string long_token;
   ASSERT_TRUE(absl::HexStringToBytes(
-      "DA7A5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
+      "DA7B5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
       "5c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898bca572f8982a9"
       "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3f2a25ec528543d9a"
       "83c850d12b3036b518fafec080df3efcd9693b944d05605686200d6500f249475737ea92"
@@ -156,7 +156,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooLong) {
       "c7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc45b0f7aa"
       "c0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d01ad42119953c5987b05c"
       "9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c"
-      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652eXXXXXXXXX",
+      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652e9ae2ca04",
       &long_token));
   EXPECT_FALSE(UnmarshalToken(long_token).ok());
 }
@@ -369,7 +369,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, DecodeTooShort) {
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, DecodeTooLong) {
   std::string encoded_extensions;
   ASSERT_TRUE(absl::HexStringToBytes(
-      "0014000100100000000000000E100000000064A5BDB012345",
+      "0014000100100000000000000E100000000064A5BDB0123456",
       &encoded_extensions));
   const absl::StatusOr<Extensions> extensions =
       DecodeExtensions(encoded_extensions);
@@ -637,7 +637,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652",
+      "e10548394165",
       &extended_token_request_encoding_1));
   std::string extended_token_request_encoding_2;
   ASSERT_TRUE(absl::HexStringToBytes(
