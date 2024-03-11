@@ -147,7 +147,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooShort) {
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooLong) {
   std::string long_token;
   ASSERT_TRUE(absl::HexStringToBytes(
-      "DA7B5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
+      "DA7A5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
       "5c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898bca572f8982a9"
       "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3f2a25ec528543d9a"
       "83c850d12b3036b518fafec080df3efcd9693b944d05605686200d6500f249475737ea92"
