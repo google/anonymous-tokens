@@ -85,7 +85,7 @@ TEST(AnonymousTokensPbOpensslConvertersTests, GenerateMaskTestSuccess) {
   EXPECT_TRUE(mask_0_bytes.empty());
   EXPECT_EQ(mask_32_bytes.size(), kRsaMessageMaskSizeInBytes32);
   EXPECT_EQ(mask_64_bytes.size(), kRsaMessageMaskSizeInBytes32 * 2);
-  EXPECT_EQ(mask_0_bytes.size(), 0);
+  EXPECT_EQ(mask_0_bytes.size(), 0u);
 }
 
 TEST(AnonymousTokensPbOpensslConvertersTests,

@@ -25,14 +25,14 @@
 namespace anonymous_tokens {
 
 AnonymousTokensRedemptionClient::AnonymousTokensRedemptionClient(
-    const AnonymousTokensUseCase use_case, const int64_t key_version)
+    const AnonymousTokensUseCase use_case, const uint64_t key_version)
     : use_case_(AnonymousTokensUseCase_Name(use_case)),
       key_version_(key_version) {}
 
 absl::StatusOr<std::unique_ptr<AnonymousTokensRedemptionClient>>
 AnonymousTokensRedemptionClient::Create(const AnonymousTokensUseCase use_case,
-                                        const int64_t key_version) {
-  if (key_version <= 0) {
+                                        const uint64_t key_version) {
+  if (key_version == 0) {
     return absl::InvalidArgumentError("Key version must be greater than 0.");
   } else if (use_case == ANONYMOUS_TOKENS_USE_CASE_UNDEFINED) {
     return absl::InvalidArgumentError("Use case must be defined.");
@@ -101,8 +101,9 @@ AnonymousTokensRedemptionClient::ProcessAnonymousTokensRedemptionResponse(
         "ProcessAnonymousTokensRedemptionResponse.");
   } else if (redemption_response.anonymous_token_redemption_results().empty()) {
     return absl::InvalidArgumentError("Cannot process an empty response.");
-  } else if (redemption_response.anonymous_token_redemption_results().size() !=
-             token_to_input_map_.size()) {
+  } else if (static_cast<size_t>(
+                 redemption_response.anonymous_token_redemption_results()
+                     .size()) != token_to_input_map_.size()) {
     return absl::InvalidArgumentError(
         "Response is missing some requested token redemptions.");
   }

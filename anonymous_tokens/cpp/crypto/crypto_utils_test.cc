@@ -142,9 +142,11 @@ std::vector<ComputeHashTestParam> GetComputeHashTestParams() {
 TEST_P(ComputeHashTest, ComputesHash) {
   const ComputeHashTestParam& params = GetParam();
   ASSERT_NE(params.hasher, nullptr);
-  std::string data = absl::HexStringToBytes(params.input_hex);
-  std::string expected_digest =
-      absl::HexStringToBytes(params.expected_digest_hex);
+  std::string data;
+  ASSERT_TRUE(absl::HexStringToBytes(params.input_hex, &data));
+  std::string expected_digest;
+  ASSERT_TRUE(
+      absl::HexStringToBytes(params.expected_digest_hex, &expected_digest));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto computed_hash,
                                    ComputeHash(data, *params.hasher));
   EXPECT_EQ(computed_hash, expected_digest);
@@ -203,9 +205,10 @@ TEST(PublicMetadataCryptoUtilsTest, PublicExponentHashDifferentModulus) {
 std::vector<IetfNewPublicExponentWithPublicMetadataTestVector>
 GetIetfNewPublicExponentWithPublicMetadataTestVectors(
     bool use_rsa_public_exponent) {
+  bool success = true;
   std::vector<IetfNewPublicExponentWithPublicMetadataTestVector> test_vectors;
-
-  std::string modulus = absl::HexStringToBytes(
+  std::string modulus;
+  success &= absl::HexStringToBytes(
       "d6930820f71fe517bf3259d14d40209b02a5c0d3d61991c731dd7da39f8d69821552e231"
       "8d6c9ad897e603887a476ea3162c1205da9ac96f02edf31df049bd55f142134c17d4382a"
       "0e78e275345f165fbe8e49cdca6cf5c726c599dd39e09e75e0f330a33121e73976e4facb"
@@ -213,56 +216,69 @@ GetIetfNewPublicExponentWithPublicMetadataTestVectors(
       "5ec7256da3fddd0718b89c365410fce61bc7c99b115fb4c3c318081fa7e1b65a37774e8e"
       "50c96e8ce2b2cc6b3b367982366a2bf9924c4bafdb3ff5e722258ab705c76d43e5f1f121"
       "b984814e98ea2b2b8725cd9bc905c0bc3d75c2a8db70a7153213c39ae371b2b5dc1dafcb"
-      "19d6fae9");
-  std::string e = absl::HexStringToBytes("010001");
+      "19d6fae9",
+      &modulus);
+  std::string e;
+  success &= absl::HexStringToBytes("010001", &e);
 
   if (use_rsa_public_exponent) {
+    std::string public_metadata_1;
+    success &= absl::HexStringToBytes("6d65746164617461", &public_metadata_1);
+    std::string new_e_1;
+    success &= absl::HexStringToBytes(
+        "30584b72f5cb557085106232f051d039e23358feee9204cf30ea567620e90d79e4a7a8"
+        "1388b1f390e18ea5240a1d8cc296ce1325128b445c48aa5a3b34fa07c324bf17bc7f1b"
+        "3efebaff81d7e032948f1477493bc183d2f8d94c947c984c6f0757527615bf2a2f0ef0"
+        "db5ad80ce99905beed0440b47fa5cb9a2334fea40ad88e6ef1",
+        &new_e_1);
     // Test vector 1
-    test_vectors.push_back(
-        {.rsa_modulus = modulus,
-         .e = e,
-         .public_metadata = absl::HexStringToBytes("6d65746164617461"),
-         .new_e = absl::HexStringToBytes(
-             "30584b72f5cb557085106232f051d039e23358feee9204cf30ea567620e90d79e"
-             "4a7a81388b1f390e18ea5240a1d8cc296ce1325128b445c48aa5a3b34fa07c324"
-             "bf17bc7f1b3efebaff81d7e032948f1477493bc183d2f8d94c947c984c6f07575"
-             "27615bf2a2f0ef0db5ad80ce99905beed0440b47fa5cb9a2334fea40ad88e6ef"
-             "1")});
+    test_vectors.push_back({.rsa_modulus = modulus,
+                            .e = e,
+                            .public_metadata = std::move(public_metadata_1),
+                            .new_e = std::move(new_e_1)});
 
+    std::string new_e_2;
+    success &= absl::HexStringToBytes(
+        "2ed5a8d2592a11bbeef728bb39018ef5c3cf343507dd77dd156d5eec7f06f04732e4be"
+        "944c5d2443d244c59e52c9fa5e8de40f55ffd0e70fbe9093d3f7be2aafd77c14b263b7"
+        "1c1c6b3ca2b9629842a902128fee4878392a950906fae35d6194e0d2548e58bbc20f84"
+        "1188ca2fceb20b2b1b45448da5c7d1c73fb6e83fa58867397b",
+        &new_e_2);
     // Test vector 2
-    test_vectors.push_back(
-        {.rsa_modulus = modulus,
-         .e = e,
-         .public_metadata = "",
-         .new_e = absl::HexStringToBytes(
-             "2ed5a8d2592a11bbeef728bb39018ef5c3cf343507dd77dd156d5eec7f06f0473"
-             "2e4be944c5d2443d244c59e52c9fa5e8de40f55ffd0e70fbe9093d3f7be2aafd7"
-             "7c14b263b71c1c6b3ca2b9629842a902128fee4878392a950906fae35d6194e0d"
-             "2548e58bbc20f841188ca2fceb20b2b1b45448da5c7d1c73fb6e83fa58867397"
-             "b")});
+    test_vectors.push_back({.rsa_modulus = std::move(modulus),
+                            .e = std::move(e),
+                            .public_metadata = "",
+                            .new_e = std::move(new_e_2)});
   } else {
+    std::string public_metadata_1;
+    success &= absl::HexStringToBytes("6d65746164617461", &public_metadata_1);
+    std::string new_e_1;
+    success &= absl::HexStringToBytes(
+        "30581b1adab07ac00a5057e2986f37caaa68ae963ffbc4d36c16ea5f3689d6f00db79a"
+        "5bee56053adc53c8d0414d4b754b58c7cc4abef99d4f0d0b2e29cbddf746c7d0f4ae26"
+        "90d82a2757b088820c0d086a40d180b2524687060d768ad5e431732102f4bc3572d97e"
+        "01dcd6301368f255faae4606399f91fa913a6d699d6ef1",
+        &new_e_1);
     // Test vector 1
-    test_vectors.push_back(
-        {.rsa_modulus = modulus,
-         .e = e,
-         .public_metadata = absl::HexStringToBytes("6d65746164617461"),
-         .new_e = absl::HexStringToBytes(
-             "30581b1adab07ac00a5057e2986f37caaa68ae963ffbc4d36c16ea5f3689d6f00"
-             "db79a5bee56053adc53c8d0414d4b754b58c7cc4abef99d4f0d0b2e29cbddf746"
-             "c7d0f4ae2690d82a2757b088820c0d086a40d180b2524687060d768ad5e431732"
-             "102f4bc3572d97e01dcd6301368f255faae4606399f91fa913a6d699d6ef1")});
+    test_vectors.push_back({.rsa_modulus = modulus,
+                            .e = e,
+                            .public_metadata = std::move(public_metadata_1),
+                            .new_e = std::move(new_e_1)});
 
+    std::string new_e_2;
+    success &= absl::HexStringToBytes(
+        "2ed579fcdf2d328ebc686c52ccaec247018832acd530a2ac72c0ec2b92db5d6bd578e9"
+        "1b6341c1021142b45b9e6e5bf031f3dd62226ec4a0f9ef99e45dd9ccd60aa60a0c59aa"
+        "c271a8caf9ee68a9d9ff281367dae09d588d3c7bca7f18de48b6981bbc729c4925c65e"
+        "4b2a7f054facbb7e5fc6e4c6c10110c62ef0b94eec397b",
+        &new_e_2);
     // Test vector 2
-    test_vectors.push_back(
-        {.rsa_modulus = modulus,
-         .e = e,
-         .public_metadata = "",
-         .new_e = absl::HexStringToBytes(
-             "2ed579fcdf2d328ebc686c52ccaec247018832acd530a2ac72c0ec2b92db5d6bd"
-             "578e91b6341c1021142b45b9e6e5bf031f3dd62226ec4a0f9ef99e45dd9ccd60a"
-             "a60a0c59aac271a8caf9ee68a9d9ff281367dae09d588d3c7bca7f18de48b6981"
-             "bbc729c4925c65e4b2a7f054facbb7e5fc6e4c6c10110c62ef0b94eec397b")});
+    test_vectors.push_back({.rsa_modulus = std::move(modulus),
+                            .e = std::move(e),
+                            .public_metadata = "",
+                            .new_e = std::move(new_e_2)});
   }
+  EXPECT_TRUE(success);
   return test_vectors;
 }
 
@@ -309,7 +325,8 @@ TEST(PublicMetadataCryptoUtilsTest,
 }
 
 TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
-  std::string rsa_modulus = absl::HexStringToBytes(
+  std::string rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "b259758bb02bc75b68b17612c9bf68c5fa05958a334c61e167bc20bcc75757c126e892"
       "10b9df3989072cf6260e6883c7cd4af4d31dde9915b69b301fbef962de8c71bd2db5ec62"
       "5da259712f86a8dc3d241e9688c82391b7bf1ebc358311f55c26be910b76f61fea408ed6"
@@ -317,11 +334,14 @@ TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
       "74d562d32cce7b7edd7cf0149ca0e96cb6525e81fbba815a8f12748e34e5135f572b2e17"
       "b7ba430081597e6fb9033c005884d5935118c60d75b010f6fece7ecdcc1cb7d58d138969"
       "3d43377f4f3de949cb1e4105e792b96d7f04b0cd262ac33cffc5a890d267425e61c19e93"
-      "63550f2285");
+      "63550f2285",
+      &rsa_modulus));
   // A hex string of 3 bytes in length is passed.
-  std::string e_not_padded = absl::HexStringToBytes("010001");
+  std::string e_not_padded;
+  ASSERT_TRUE(absl::HexStringToBytes("010001", &e_not_padded));
   // A hex string of 4 bytes in length is passed.
-  std::string e_padded = absl::HexStringToBytes("00010001");
+  std::string e_padded;
+  ASSERT_TRUE(absl::HexStringToBytes("00010001", &e_padded));
 
   // Convert both padded and not padded rsa public keys to rsa structs.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
@@ -337,7 +357,8 @@ TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
       std::string result_e_padded,
       RsaSsaPssPublicKeyToDerEncoding(rsa_e_padded.get()));
 
-  std::string expected_der_encoding = absl::HexStringToBytes(
+  std::string expected_der_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "30820152303d06092a864886f70d01010a3030a00d300b0609608648016503040202a11a"
       "301806092a864886f70d010108300b0609608648016503040202a2030201300382010f00"
       "3082010a0282010100b259758bb02bc75b68b17612c9bf68c5fa05958a334c61e167bc20"
@@ -347,7 +368,8 @@ TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
       "ae7a3c5a55e66f6474d562d32cce7b7edd7cf0149ca0e96cb6525e81fbba815a8f12748e"
       "34e5135f572b2e17b7ba430081597e6fb9033c005884d5935118c60d75b010f6fece7ecd"
       "cc1cb7d58d1389693d43377f4f3de949cb1e4105e792b96d7f04b0cd262ac33cffc5a890"
-      "d267425e61c19e9363550f22850203010001");
+      "d267425e61c19e9363550f22850203010001",
+      &expected_der_encoding));
 
   EXPECT_EQ(result_e_not_padded, expected_der_encoding);
   EXPECT_EQ(result_e_padded, expected_der_encoding);
@@ -356,7 +378,8 @@ TEST(AnonymousTokensCryptoUtilsTest, RsaPssDerEncoding) {
 // The public key used in this test is taken from the test vectors found here:
 // https://www.ietf.org/archive/id/draft-ietf-privacypass-protocol-10.html#name-issuance-protocol-2-blind-rs
 TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
-  std::string rsa_modulus = absl::HexStringToBytes(
+  std::string rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab43c0df3a8c12993af1"
       "2b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a224d6b02f09e5c374d0"
       "cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5e794fc98a313927687"
@@ -364,14 +387,17 @@ TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
       "32db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbcd78a337d17b1dba9e8"
       "28bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2073fe49740c01f00e1"
       "09106066983d21e5f83f086e2e823c879cd43cef700d2a352a9babd612d03cad02db134b"
-      "7e225a5f");
-  std::string e = absl::HexStringToBytes("010001");
+      "7e225a5f",
+      &rsa_modulus));
+  std::string e;
+  ASSERT_TRUE(absl::HexStringToBytes("010001", &e));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa,
                                    CreatePublicKeyRSA(rsa_modulus, e));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string result,
                                    RsaSsaPssPublicKeyToDerEncoding(rsa.get()));
 
-  std::string expected_der_encoding = absl::HexStringToBytes(
+  std::string expected_der_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "30820152303d06092a864886f70d01010a3030a00d300b0609608648016503040202a11a"
       "301806092a864886f70d010108300b0609608648016503040202a2030201300382010f00"
       "3082010a0282010100cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab"
@@ -381,7 +407,8 @@ TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
       "733f7597abe44d31c732db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbc"
       "d78a337d17b1dba9e828bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2"
       "073fe49740c01f00e109106066983d21e5f83f086e2e823c879cd43cef700d2a352a9bab"
-      "d612d03cad02db134b7e225a5f0203010001");
+      "d612d03cad02db134b7e225a5f0203010001",
+      &expected_der_encoding));
 
   EXPECT_EQ(result, expected_der_encoding);
 }

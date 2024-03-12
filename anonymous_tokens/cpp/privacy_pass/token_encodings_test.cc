@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gmock/gmock.h>
@@ -37,31 +38,38 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string authenticator_input,
                                    AuthenticatorInput(token));
 
-  std::string expected_authenticator_input_encoding =
-      absl::HexStringToBytes("DA7A");
+  std::string expected_authenticator_input_encoding;
+  ASSERT_TRUE(
+      absl::HexStringToBytes("DA7A", &expected_authenticator_input_encoding));
 
   EXPECT_EQ(authenticator_input, expected_authenticator_input_encoding);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, AuthenticatorInputTest) {
-  Token token = {
-      /*token_type=*/0XDA7A, /*token_key_id=*/
-      absl::HexStringToBytes(
-          "ca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd2708"),
-      /*nonce=*/
-      absl::HexStringToBytes(
-          "5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb"),
-      /*context=*/
-      absl::HexStringToBytes(
-          "11e15c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898b")};
+  std::string token_key_id;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "ca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd2708",
+      &token_key_id));
+  std::string nonce;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb",
+      &nonce));
+  std::string context;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "11e15c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898b",
+      &context));
+  Token token = {/*token_type=*/0XDA7A, std::move(token_key_id),
+                 std::move(nonce), std::move(context)};
 
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string authenticator_input,
                                    AuthenticatorInput(token));
 
-  std::string expected_authenticator_input_encoding = absl::HexStringToBytes(
+  std::string expected_authenticator_input_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
       "5c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898bca572f8982a9"
-      "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd2708");
+      "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd2708",
+      &expected_authenticator_input_encoding));
   EXPECT_EQ(authenticator_input, expected_authenticator_input_encoding);
 }
 
@@ -69,37 +77,45 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, EmptyMarshalTokenTest) {
   Token token;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
                                    MarshalToken(token));
-  std::string expected_token_encoding = absl::HexStringToBytes("DA7A");
+  std::string expected_token_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes("DA7A", &expected_token_encoding));
 
   EXPECT_EQ(encoded_token, expected_token_encoding);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, MarshalTokenTest) {
-  Token token = {
-      /*token_type=*/0XDA7A, /*token_key_id=*/
-      absl::HexStringToBytes(
-          "ca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd2708"),
-      /*nonce=*/
-      absl::HexStringToBytes(
-          "5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb"),
-      /*context=*/
-      absl::HexStringToBytes(
-          "11e15c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898b"),
-      /*authenticator=*/
-      absl::HexStringToBytes(
-          "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d056056"
-          "86200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427"
-          "bbae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087"
-          "c0e881f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9"
-          "321b0826d59402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6ef"
-          "b54e76a5a8056f5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e"
-          "36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f"
-          "01d90e0d2d784874ff000ae105483941652e")};
+  std::string token_key_id;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "ca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd2708",
+      &token_key_id));
+  std::string nonce;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb",
+      &nonce));
+  std::string context;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "11e15c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898b",
+      &context));
+  std::string authenticator;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560568620"
+      "0d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129"
+      "b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881f5e156"
+      "68e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d59402a8"
+      "7e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d0"
+      "1ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f61"
+      "1029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae10548"
+      "3941652e",
+      &authenticator));
+  Token token = {/*token_type=*/0XDA7A, std::move(token_key_id),
+                 std::move(nonce), std::move(context),
+                 std::move(authenticator)};
 
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
                                    MarshalToken(token));
 
-  std::string expected_token_encoding = absl::HexStringToBytes(
+  std::string expected_token_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
       "5c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898bca572f8982a9"
       "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3f2a25ec528543d9a"
@@ -109,7 +125,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, MarshalTokenTest) {
       "c7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc45b0f7aa"
       "c0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d01ad42119953c5987b05c"
       "9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c"
-      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652e");
+      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652e",
+      &expected_token_encoding));
   EXPECT_EQ(encoded_token, expected_token_encoding);
 
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Token token2,
@@ -122,12 +139,14 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, MarshalTokenTest) {
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooShort) {
-  const std::string short_token = absl::HexStringToBytes("DA7A5f5e466042");
+  std::string short_token;
+  ASSERT_TRUE(absl::HexStringToBytes("DA7A5f5e466042", &short_token));
   EXPECT_FALSE(UnmarshalToken(short_token).ok());
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooLong) {
-  std::string long_token = absl::HexStringToBytes(
+  std::string long_token;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
       "5c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898bca572f8982a9"
       "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3f2a25ec528543d9a"
@@ -137,12 +156,14 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalTooLong) {
       "c7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc45b0f7aa"
       "c0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d01ad42119953c5987b05c"
       "9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c"
-      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652eXXXXXXXXX");
+      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652e9ae2ca04",
+      &long_token));
   EXPECT_FALSE(UnmarshalToken(long_token).ok());
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalWrongType) {
-  std::string token = absl::HexStringToBytes(
+  std::string token;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7B5f5e46604255ac6a8ae0820f5b20c236118d97d917509ccbc96b5a82ae40ebeb11e1"
       "5c91a7c2ad02abd66645802373db1d823bea80f08d452541fb2b62b5898bca572f8982a9"
       "ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3f2a25ec528543d9a"
@@ -152,7 +173,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, UnmarshalWrongType) {
       "c7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc45b0f7aa"
       "c0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d01ad42119953c5987b05c"
       "9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c"
-      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652e");
+      "4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae105483941652e",
+      &token));
   EXPECT_FALSE(UnmarshalToken(token).ok());
 }
 
@@ -161,7 +183,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, EmptyExtensionTest) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_extension,
                                    EncodeExtension(extension));
 
-  std::string expected_extension_encoding = absl::HexStringToBytes("00010000");
+  std::string expected_extension_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes("00010000", &expected_extension_encoding));
   EXPECT_EQ(encoded_extension, expected_extension_encoding);
 }
 
@@ -181,25 +204,30 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, ExtensionEncodingSuccess) {
+  std::string extension_value;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "46a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c92ad61c08a9fe416"
+      "29a642263e4857e428a706ba87659361fed38087c0e881f5e15668e0701d7edd63be98fc"
+      "c7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc45b0f7a"
+      "a",
+      &extension_value));
   Extension extension = {
       // Random hex number to populate the uint16_t extension_type.
       /*extension_type=*/0x5E6D,
       // Random hex string to populate extension_value.
-      /*extension_value=*/absl::HexStringToBytes(
-          "46a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c92ad61c08a9f"
-          "e41629a642263e4857e428a706ba87659361fed38087c0e881f5e15668e0701d7edd"
-          "63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f"
-          "36cc45b0f7aa")};
+      std::move(extension_value)};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_extension,
                                    EncodeExtension(extension));
   // The first 2 bytes of the expected_extension_encoding store the
   // extension_type. The next two bytes store the number of bytes needed for the
   // extension_value. These 4 bytes are then prefixed to the extension_value.
-  std::string expected_extension_encoding = absl::HexStringToBytes(
+  std::string expected_extension_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "5e6d006c46a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c92ad61c0"
       "8a9fe41629a642263e4857e428a706ba87659361fed38087c0e881f5e15668e0701d7edd"
       "63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc"
-      "45b0f7aa");
+      "45b0f7aa",
+      &expected_extension_encoding));
   EXPECT_EQ(encoded_extension, expected_extension_encoding);
 }
 
@@ -208,7 +236,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, EmptyExtensionsTest) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_extensions,
                                    EncodeExtensions(extensions));
 
-  std::string expected_extensions_encoding = absl::HexStringToBytes("0000");
+  std::string expected_extensions_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes("0000", &expected_extensions_encoding));
   EXPECT_EQ(encoded_extensions, expected_extensions_encoding);
 }
 
@@ -232,50 +261,58 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      SingleExtensionInExtensionsSuccess) {
+  std::string extension_value;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "46a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c92ad61c08a9fe416"
+      "29a642263e4857e428a706ba87659361fed38087c0e881f5e15668e0701d7edd63be98fc"
+      "c7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f36cc45b0f7a"
+      "a",
+      &extension_value));
   Extensions extensions;
   extensions.extensions.push_back(Extension{
       // Random hex number to populate the uint16_t extension_type.
       /*extension_type=*/0x5E6D,
       // Random hex string to populate extension_value.
-      /*extension_value=*/absl::HexStringToBytes(
-          "46a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c92"
-          "ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e8"
-          "81f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a241"
-          "81d7b9321b0826d59402a87e08514f36cc45b0f7aa")});
+      std::move(extension_value)});
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_extensions,
                                    EncodeExtensions(extensions));
   // The first 2 bytes of the expected_extensions_encoding store the length of
   // the rest of the string. The rest of the string is the concatenation
   // of individually encoded extensions.
-  std::string expected_extensions_encoding = absl::HexStringToBytes(
+  std::string expected_extensions_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "00705e6d006c46a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c92ad"
       "61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881f5e15668e0701d"
       "7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d59402a87e08514f"
-      "36cc45b0f7aa");
+      "36cc45b0f7aa",
+      &expected_extensions_encoding));
   EXPECT_EQ(encoded_extensions, expected_extensions_encoding);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      MultipleExtensionsEncodingSuccess) {
+  std::string extension_value_1;
+  ASSERT_TRUE(absl::HexStringToBytes("01", &extension_value_1));
+  std::string extension_value_2;
+  ASSERT_TRUE(absl::HexStringToBytes("0202", &extension_value_2));
   Extensions extensions;
   extensions.extensions.push_back(
-      Extension{/*extension_type=*/0x0001,
-                /*extension_value=*/absl::HexStringToBytes("01")});
+      Extension{/*extension_type=*/0x0001, std::move(extension_value_1)});
   extensions.extensions.push_back(
-      Extension{/*extension_type=*/0x0002,
-                /*extension_value=*/absl::HexStringToBytes("0202")});
+      Extension{/*extension_type=*/0x0002, std::move(extension_value_2)});
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const std::string encoded_extensions,
                                    EncodeExtensions(extensions));
   // The first 2 bytes of the expected_extensions_encoding store the length of
   // the rest of the string. The rest of the string is the concatenation
   // of individually encoded extensions.
-  std::string expected_extensions_encoding =
-      absl::HexStringToBytes("000b0001000101000200020202");
+  std::string expected_extensions_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes("000b0001000101000200020202",
+                                     &expected_extensions_encoding));
   EXPECT_EQ(encoded_extensions, expected_extensions_encoding);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extensions extensions2,
                                    DecodeExtensions(encoded_extensions));
   EXPECT_EQ(extensions2.extensions.size(), extensions.extensions.size());
-  for (int i = 0; i < extensions.extensions.size(); ++i) {
+  for (size_t i = 0; i < extensions.extensions.size(); ++i) {
     EXPECT_EQ(extensions2.extensions[i].extension_type,
               extensions.extensions[i].extension_type);
     EXPECT_EQ(extensions2.extensions[i].extension_value,
@@ -301,16 +338,17 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, DecodeExtensions) {
-  const std::string encoded_extensions =
-      absl::HexStringToBytes("0014000100100000000000000E100000000064A5BDB0");
+  std::string encoded_extensions;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "0014000100100000000000000E100000000064A5BDB0", &encoded_extensions));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extensions extensions,
                                    DecodeExtensions(encoded_extensions));
-  EXPECT_EQ(extensions.extensions.size(), 1);
+  EXPECT_EQ(extensions.extensions.size(), 1u);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const ExpirationTimestamp et,
       ExpirationTimestamp::FromExtension(extensions.extensions[0]));
-  EXPECT_EQ(et.timestamp_precision, 3600);
-  EXPECT_EQ(et.timestamp, 1688583600);
+  EXPECT_EQ(et.timestamp_precision, 3600u);
+  EXPECT_EQ(et.timestamp, 1688583600u);
   Extensions extensions2;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext2, et.AsExtension());
   extensions2.extensions.push_back(ext2);
@@ -321,16 +359,18 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, DecodeExtensions) {
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, DecodeTooShort) {
-  const std::string encoded_extensions =
-      absl::HexStringToBytes("00140001001000");
+  std::string encoded_extensions;
+  ASSERT_TRUE(absl::HexStringToBytes("00140001001000", &encoded_extensions));
   const absl::StatusOr<Extensions> extensions =
       DecodeExtensions(encoded_extensions);
   EXPECT_FALSE(extensions.ok()) << extensions.status();
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, DecodeTooLong) {
-  const std::string encoded_extensions = absl::HexStringToBytes(
-      "0014000100100000000000000E100000000064A5BDB012345");
+  std::string encoded_extensions;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "0014000100100000000000000E100000000064A5BDB0123456",
+      &encoded_extensions));
   const absl::StatusOr<Extensions> extensions =
       DecodeExtensions(encoded_extensions);
   EXPECT_FALSE(extensions.ok());
@@ -459,7 +499,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
                                    MarshalTokenChallenge(token_challenge));
 
-  std::string expected_token_encoding = absl::HexStringToBytes("DA7A0000");
+  std::string expected_token_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes("DA7A0000", &expected_token_encoding));
 
   EXPECT_EQ(encoded_token, expected_token_encoding);
 }
@@ -470,15 +511,17 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, MarshalTokenChallengeTest) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
                                    MarshalTokenChallenge(token_challenge));
 
-  std::string expected_token_encoding =
-      absl::HexStringToBytes("da7a00116973737565722e676f6f676c652e636f6d");
+  std::string expected_token_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "da7a00116973737565722e676f6f676c652e636f6d", &expected_token_encoding));
 
   EXPECT_EQ(encoded_token, expected_token_encoding);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      UnMarshalTokenRequestWrongTokenType) {
-  std::string token_request_encoding = absl::HexStringToBytes(
+  std::string token_request_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "1234124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -486,7 +529,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652e");
+      "e105483941652e",
+      &token_request_encoding));
   absl::StatusOr<TokenRequest> token_request =
       UnmarshalTokenRequest(token_request_encoding);
 
@@ -497,7 +541,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      UnMarshalTokenRequestBlindedRequestTooShort) {
-  std::string token_request_encoding = absl::HexStringToBytes(
+  std::string token_request_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -505,7 +550,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000"
-      "a");
+      "a",
+      &token_request_encoding));
   absl::StatusOr<TokenRequest> token_request =
       UnmarshalTokenRequest(token_request_encoding);
 
@@ -516,7 +562,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      UnMarshalTokenRequestBlindedRequestTooLong) {
-  std::string token_request_encoding = absl::HexStringToBytes(
+  std::string token_request_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -524,7 +571,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652ea5cc6f2c4143474e458c8d2ca8e9aa");
+      "e105483941652ea5cc6f2c4143474e458c8d2ca8e9aa",
+      &token_request_encoding));
   absl::StatusOr<TokenRequest> token_request =
       UnmarshalTokenRequest(token_request_encoding);
 
@@ -535,22 +583,26 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      MarshalAndUnmarshalTokenRequest) {
+  std::string blinded_token_request;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560568620"
+      "0d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129"
+      "b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881f5e156"
+      "68e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d59402a8"
+      "7e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d0"
+      "1ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f61"
+      "1029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae10548"
+      "3941652e",
+      &blinded_token_request));
   TokenRequest token_request{
       .token_type = 0xDA7A,
       .truncated_token_key_id = 0x12,
-      .blinded_token_request = absl::HexStringToBytes(
-          "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d056056"
-          "86200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427"
-          "bbae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087"
-          "c0e881f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9"
-          "321b0826d59402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6ef"
-          "b54e76a5a8056f5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e"
-          "36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f"
-          "01d90e0d2d784874ff000ae105483941652e")};
+      .blinded_token_request = std::move(blinded_token_request)};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token_request,
                                    MarshalTokenRequest(token_request));
 
-  std::string expected_token_request_encoding = absl::HexStringToBytes(
+  std::string expected_token_request_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -558,7 +610,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652e");
+      "e105483941652e",
+      &expected_token_request_encoding));
 
   EXPECT_EQ(encoded_token_request, expected_token_request_encoding);
 
@@ -575,7 +628,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      UnmarshalExtendedTokenRequestTooShort) {
-  std::string extended_token_request_encoding_1 = absl::HexStringToBytes(
+  std::string extended_token_request_encoding_1;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -583,8 +637,10 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652");
-  std::string extended_token_request_encoding_2 = absl::HexStringToBytes(
+      "e10548394165",
+      &extended_token_request_encoding_1));
+  std::string extended_token_request_encoding_2;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -592,7 +648,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652e");
+      "e105483941652e",
+      &extended_token_request_encoding_2));
 
   absl::StatusOr<ExtendedTokenRequest> decoded_extended_token_request_1 =
       UnmarshalExtendedTokenRequest(extended_token_request_encoding_1);
@@ -611,7 +668,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      UnmarshalExtendedTokenRequestTooLong) {
-  std::string extended_token_request_encoding = absl::HexStringToBytes(
+  std::string extended_token_request_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -619,7 +677,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652e000b0001000101000200020202DA");
+      "e105483941652e000b0001000101000200020202DA",
+      &extended_token_request_encoding));
 
   absl::StatusOr<ExtendedTokenRequest> decoded_extended_token_request =
       UnmarshalExtendedTokenRequest(extended_token_request_encoding);
@@ -632,32 +691,38 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
      MarshalAndUnmarshalExtendedTokenRequest) {
+  std::string blinded_token_request;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560568620"
+      "0d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129"
+      "b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881f5e156"
+      "68e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9321b0826d59402a8"
+      "7e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f5c27d0"
+      "1ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac1f8f61"
+      "1029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000ae10548"
+      "3941652e",
+      &blinded_token_request));
   TokenRequest token_request{
       .token_type = 0xDA7A,
       .truncated_token_key_id = 0x12,
-      .blinded_token_request = absl::HexStringToBytes(
-          "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d056056"
-          "86200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427"
-          "bbae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087"
-          "c0e881f5e15668e0701d7edd63be98fcc7415819d466c61341de03d7e2a24181d7b9"
-          "321b0826d59402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6ef"
-          "b54e76a5a8056f5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e"
-          "36f18573f603735fac1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f"
-          "01d90e0d2d784874ff000ae105483941652e")};
+      .blinded_token_request = std::move(blinded_token_request)};
+  std::string extension_value_1;
+  ASSERT_TRUE(absl::HexStringToBytes("01", &extension_value_1));
+  std::string extension_value_2;
+  ASSERT_TRUE(absl::HexStringToBytes("0202", &extension_value_2));
   Extensions extensions;
   extensions.extensions.push_back(
-      Extension{/*extension_type=*/0x0001,
-                /*extension_value=*/absl::HexStringToBytes("01")});
+      Extension{/*extension_type=*/0x0001, std::move(extension_value_1)});
   extensions.extensions.push_back(
-      Extension{/*extension_type=*/0x0002,
-                /*extension_value=*/absl::HexStringToBytes("0202")});
+      Extension{/*extension_type=*/0x0002, std::move(extension_value_2)});
   ExtendedTokenRequest extended_token_request{token_request, extensions};
 
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::string encoded_extended_token_request,
       MarshalExtendedTokenRequest(extended_token_request));
 
-  std::string expected_extended_token_request_encoding = absl::HexStringToBytes(
+  std::string expected_extended_token_request_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
       "DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560"
       "5686200d6500f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bb"
       "ae7129b88c92ad61c08a9fe41629a642263e4857e428a706ba87659361fed38087c0e881"
@@ -665,7 +730,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
       "9402a87e08514f36cc45b0f7aac0e9a6578ddb0534c8ebe528c693b6efb54e76a5a8056f"
       "5c27d01ad42119953c5987b05c9ae2ca04b12838e641b4b1aac21e36f18573f603735fac"
       "1f8f611029e4cb76c8a5cc6f2c4143474e458c8d2ca8e9a71f01d90e0d2d784874ff000a"
-      "e105483941652e000b0001000101000200020202");
+      "e105483941652e000b0001000101000200020202",
+      &expected_extended_token_request_encoding));
 
   EXPECT_EQ(encoded_extended_token_request,
             expected_extended_token_request_encoding);
@@ -682,7 +748,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
             token_request.blinded_token_request);
   EXPECT_EQ(decoded_extended_token_request.extensions.extensions.size(),
             extensions.extensions.size());
-  for (int i = 0; i < extensions.extensions.size(); ++i) {
+  for (size_t i = 0; i < extensions.extensions.size(); ++i) {
     EXPECT_EQ(
         decoded_extended_token_request.extensions.extensions[i].extension_type,
         extensions.extensions[i].extension_type);
@@ -772,7 +838,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
   extensions.extensions.push_back(ext);
   EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
-              absl::StatusCode::kInvalidArgument);
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
@@ -783,7 +849,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
   extensions.extensions.push_back(ext);
   EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
-              absl::StatusCode::kInvalidArgument);
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
@@ -794,7 +860,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
   extensions.extensions.push_back(ext);
   EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
-              absl::StatusCode::kInvalidArgument);
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
@@ -805,7 +871,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, gh.AsExtension());
   extensions.extensions.push_back(ext);
   EXPECT_EQ(ValidateExtensionsValues(extensions, absl::Now()).code(),
-              absl::StatusCode::kInvalidArgument);
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,

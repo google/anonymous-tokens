@@ -155,7 +155,7 @@ absl::StatusOr<std::string> RsaBlindSigner::Sign(
     return absl::InvalidArgumentError("blinded_data string is empty.");
   }
 
-  int mod_size = RSA_size(rsa_private_key_.get());
+  unsigned int mod_size = RSA_size(rsa_private_key_.get());
   if (blinded_data.size() != mod_size) {
     return absl::InternalError(absl::StrCat(
         "Expected blind data size = ", mod_size,

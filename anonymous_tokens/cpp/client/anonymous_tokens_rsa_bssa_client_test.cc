@@ -79,7 +79,7 @@ absl::StatusOr<std::vector<PlaintextMessageWithPublicMetadata>> CreateInput(
 
   std::vector<PlaintextMessageWithPublicMetadata> anonymmous_tokens_input_proto;
   anonymmous_tokens_input_proto.reserve(messages.size());
-  for (int i = 0; i < messages.size(); ++i) {
+  for (size_t i = 0; i < messages.size(); ++i) {
     PlaintextMessageWithPublicMetadata input_message_and_metadata;
     input_message_and_metadata.set_plaintext_message(messages[i]);
     if (!public_metadata.empty()) {
@@ -272,7 +272,7 @@ TEST_F(AnonymousTokensRsaBssaClientTest, EnsureRandomTokens) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::vector<RSABlindSignatureTokenWithInput> tokens,
       client_->ProcessResponse(response));
-  ASSERT_EQ(tokens.size(), 2);
+  ASSERT_EQ(tokens.size(), 2u);
   for (const RSABlindSignatureTokenWithInput& token : tokens) {
     EXPECT_EQ(token.input().plaintext_message(), message);
   }

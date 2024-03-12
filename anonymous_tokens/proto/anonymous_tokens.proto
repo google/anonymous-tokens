@@ -100,7 +100,7 @@ message RSABlindSignaturePublicKey {
   bytes use_case = 9;
 
   // Version number of public key.
-  int64 key_version = 1;
+  uint64 key_version = 1;
 
   // Serialization of the public key.
   bytes serialized_public_key = 2;
@@ -153,7 +153,7 @@ message AnonymousTokensPublicKeysGetRequest {
   // for the requested use_case and key_version combination.
   //
   // If unset, all valid possibilities for the key are returned.
-  int64 key_version = 2;
+  uint64 key_version = 2;
 
   // Public key that becomes valid at or before this requested time and not
   // after. More explicitly, we need the requested key to be valid at the
@@ -184,7 +184,7 @@ message AnonymousTokensSignRequest {
     bytes use_case = 1;
 
     // Version of key used to sign and generate the token.
-    int64 key_version = 2;
+    uint64 key_version = 2;
 
     // Public metadata to be tied to the `blinded message` (serialized_token).
     //
@@ -214,7 +214,7 @@ message AnonymousTokensSignResponse {
     bytes use_case = 1;
 
     // Version of key used to sign and generate the token.
-    int64 key_version = 2;
+    uint64 key_version = 2;
 
     // Public metadata tied to the input (serialized_blinded_message) and the
     // `blinded` signature (serialized_token).
@@ -250,7 +250,7 @@ message AnonymousTokensRedemptionRequest {
 
     // Version of key associated with this anonymous token that needs to be
     // redeemed.
-    int64 key_version = 2;
+    uint64 key_version = 2;
 
     // Public metadata to be used for redeeming the signature
     // (serialized_unblinded_token).
@@ -279,7 +279,7 @@ message AnonymousTokensRedemptionResponse {
     bytes use_case = 3;
 
     // Version of key associated with this redeemed anonymous token.
-    int64 key_version = 4;
+    uint64 key_version = 4;
 
     // Public metadata used for verifying the signature
     // (serialized_unblinded_token).

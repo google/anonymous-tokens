@@ -51,8 +51,10 @@ absl::Status RunDemo() {
   std::string extended_token_request_str;
 
   std::cin >> extended_token_request_hex_str;
-  extended_token_request_str =
-      absl::HexStringToBytes(extended_token_request_hex_str);
+  if (!absl::HexStringToBytes(extended_token_request_hex_str,
+                              &extended_token_request_str)) {
+    return absl::InvalidArgumentError("Invalid extended token request");
+  }
 
   absl::StatusOr<anonymous_tokens::ExtendedTokenRequest>
       extended_token_request =

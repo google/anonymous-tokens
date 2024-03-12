@@ -54,7 +54,7 @@ constexpr int kSaltLengthInBytes48 = 48;
 // Length of message mask, 32 bytes.
 //
 // https://datatracker.ietf.org/doc/draft-irtf-cfrg-rsa-blind-signatures/
-constexpr int kRsaMessageMaskSizeInBytes32 = 32;
+constexpr size_t kRsaMessageMaskSizeInBytes32 = 32;
 
 // Info used in HKDF for Public Metadata Hash.
 constexpr absl::string_view kHkdfPublicMetadataInfo = "PBRSA";
