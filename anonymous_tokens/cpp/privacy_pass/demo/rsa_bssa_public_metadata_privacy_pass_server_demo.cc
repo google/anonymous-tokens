@@ -50,7 +50,7 @@ absl::Status RunDemo() {
     return rsa_public_key.status();
   }
 
-  // Compute RSA BSSA Public Key Token ID.
+  // Compute RSA BSSA Public Key in DER encoded format.
   absl::StatusOr<std::string> public_key_der =
       anonymous_tokens::RsaSsaPssPublicKeyToDerEncoding(
           rsa_public_key.value().get());
@@ -60,7 +60,7 @@ absl::Status RunDemo() {
   std::string public_key_base64URL = absl::Base64Escape(public_key_der.value());
 
   // Replace '+' with '-' and '/' with '_'
-  // I know one could use absl::WebSafeBase64Escape instead, but it does not pad the string with '=', which is required by Privacy Pass spec.
+  // Using std::replace instead of absl::WebSafeBase64Escape as latter does not pad the string with '=', which is required by Privacy Pass spec.
   std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '+', '-');
   std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '/', '_');
   std::cout << "type: 0xDA7A\n"
