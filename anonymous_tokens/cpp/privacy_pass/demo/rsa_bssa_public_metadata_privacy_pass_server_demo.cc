@@ -30,7 +30,7 @@
 
 absl::Status RunDemo() {
   // Construct RSA private key with a strong rsa modulus.
-  auto [_, test_rsa_private_key] =
+  auto [test_rsa_public_key, test_rsa_private_key] =
       anonymous_tokens::GetStrongTestRsaKeyPair2048();
   absl::StatusOr<bssl::UniquePtr<RSA>> rsa_private_key =
       anonymous_tokens::CreatePrivateKeyRSA(
@@ -41,6 +41,31 @@ absl::Status RunDemo() {
   if (!rsa_private_key.ok()) {
     return rsa_private_key.status();
   }
+
+  // Get base64url encoded public key for client to use.
+  absl::StatusOr<bssl::UniquePtr<RSA>> rsa_public_key =
+      anonymous_tokens::CreatePublicKeyRSA(
+          test_rsa_public_key.n, test_rsa_public_key.e);
+  if (!rsa_public_key.ok()) {
+    return rsa_public_key.status();
+  }
+
+  // Compute RSA BSSA Public Key in DER encoded format.
+  absl::StatusOr<std::string> public_key_der =
+      anonymous_tokens::RsaSsaPssPublicKeyToDerEncoding(
+          rsa_public_key.value().get());
+  if (!public_key_der.ok()) {
+    return public_key_der.status();
+  }
+  std::string public_key_base64URL = absl::Base64Escape(public_key_der.value());
+
+  // Replace '+' with '-' and '/' with '_'
+  // Using std::replace instead of absl::WebSafeBase64Escape as latter does not pad the string with '=', which is required by Privacy Pass spec.
+  std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '+', '-');
+  std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '/', '_');
+  std::cout << "type: 0xDA7A\n"
+            << "public_key: " << public_key_base64URL
+            << std::endl;
 
   // Wait for token request.
   std::cout << "Waiting for Token Type DA7A, Extended Token Request (in "
