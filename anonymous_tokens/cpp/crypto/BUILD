@@ -13,7 +13,6 @@ cc_library(
     deps = [
         ":constants",
         ":crypto_utils",
-        "//anonymous_tokens/cpp/shared:status_utils",
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",
         "@boringssl//:ssl",
         "@com_google_absl//absl/status",

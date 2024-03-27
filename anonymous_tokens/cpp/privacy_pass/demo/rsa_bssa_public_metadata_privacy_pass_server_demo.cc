@@ -16,6 +16,7 @@
 // bazel run -c opt :rsa_bssa_public_metadata_privacy_pass_server_demo
 // --cxxopt='-std=c++17'
 
+#include <algorithm>
 #include <iostream>
 #include <ostream>
 #include <string>
@@ -60,12 +61,14 @@ absl::Status RunDemo() {
   std::string public_key_base64URL = absl::Base64Escape(public_key_der.value());
 
   // Replace '+' with '-' and '/' with '_'
-  // Using std::replace instead of absl::WebSafeBase64Escape as latter does not pad the string with '=', which is required by Privacy Pass spec.
-  std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '+', '-');
-  std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '/', '_');
+  // Using std::replace instead of absl::WebSafeBase64Escape as latter does not
+  // pad the string with '=', which is required by Privacy Pass spec.
+  std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '+',
+               '-');
+  std::replace(public_key_base64URL.begin(), public_key_base64URL.end(), '/',
+               '_');
   std::cout << "type: 0xDA7A\n"
-            << "public_key: " << public_key_base64URL
-            << std::endl;
+            << "public_key: " << public_key_base64URL << std::endl;
 
   // Wait for token request.
   std::cout << "Waiting for Token Type DA7A, Extended Token Request (in "
