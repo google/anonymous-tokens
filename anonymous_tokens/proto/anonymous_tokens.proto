@@ -16,6 +16,9 @@ syntax = "proto3";
 
 package anonymous_tokens;
 
+option java_multiple_files = true;
+option java_package = "com.google.privacy.privatemembership.anonymoustokens.proto";
+
 message Timestamp {
  int64 seconds = 1;
  int32 nanos = 2;

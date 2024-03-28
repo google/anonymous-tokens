@@ -14,3 +14,13 @@ cc_proto_library(
     name = "anonymous_tokens_cc_proto",
     deps = [":anonymous_tokens_proto"],
 )
+
+java_proto_library(
+    name = "anonymous_tokens_java_proto",
+    deps = [":anonymous_tokens_proto"],
+)
+
+java_lite_proto_library(
+    name = "anonymous_tokens_java_proto_lite",
+    deps = [":anonymous_tokens_proto"],
+)
