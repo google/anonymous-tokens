@@ -31,8 +31,8 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
 #include <openssl/base.h>
-#include "third_party/openssl/boringssl/src/include/openssl/digest.h"
 #include <openssl/bytestring.h>
+#include <openssl/digest.h>
 #include <openssl/err.h>
 #include <openssl/hkdf.h>
 #include <openssl/mem.h>
