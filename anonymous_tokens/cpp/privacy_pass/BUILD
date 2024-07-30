@@ -33,9 +33,7 @@ cc_test(
         "//anonymous_tokens/cpp/testing:utils",
         "@boringssl//:ssl",
         "@com_github_google_googletest//:gtest_main",
-        "@com_google_absl//absl/log",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
     ],
 )
 

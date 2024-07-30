@@ -413,6 +413,106 @@ TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
   EXPECT_EQ(result, expected_der_encoding);
 }
 
+TEST(AnonymousTokensCryptoUtilsTest,
+     PrivacyPassTruncatedTokenKeyIdCollisionSelf) {
+  std::string rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab43c0df3a8c12993af1"
+      "2b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a224d6b02f09e5c374d0"
+      "cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5e794fc98a313927687"
+      "9757ce453b526ef9bf6ceb99979b8423b90f4461a22af37aab0cf5733f7597abe44d31c7"
+      "32db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbcd78a337d17b1dba9e8"
+      "28bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2073fe49740c01f00e1"
+      "09106066983d21e5f83f086e2e823c879cd43cef700d2a352a9babd612d03cad02db134b"
+      "7e225a5f",
+      &rsa_modulus));
+  std::string e;
+  ASSERT_TRUE(absl::HexStringToBytes("010001", &e));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa,
+                                   CreatePublicKeyRSA(rsa_modulus, e));
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      bool collision,
+      PrivacyPassTruncatedTokenKeyIdCollision(rsa.get(), rsa.get()));
+  EXPECT_TRUE(collision);
+}
+
+TEST(AnonymousTokensCryptoUtilsTest,
+     PrivacyPassTruncatedTokenKeyIdCollisionFalse) {
+  std::string rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab43c0df3a8c12993af1"
+      "2b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a224d6b02f09e5c374d0"
+      "cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5e794fc98a313927687"
+      "9757ce453b526ef9bf6ceb99979b8423b90f4461a22af37aab0cf5733f7597abe44d31c7"
+      "32db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbcd78a337d17b1dba9e8"
+      "28bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2073fe49740c01f00e1"
+      "09106066983d21e5f83f086e2e823c879cd43cef700d2a352a9babd612d03cad02db134b"
+      "7e225a5f",
+      &rsa_modulus));
+  std::string e;
+  ASSERT_TRUE(absl::HexStringToBytes("010001", &e));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa,
+                                   CreatePublicKeyRSA(rsa_modulus, e));
+
+  std::string other_rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "b259758bb02bc75b68b17612c9bf68c5fa05958a334c61e167bc20bcc75757c126e892"
+      "10b9df3989072cf6260e6883c7cd4af4d31dde9915b69b301fbef962de8c71bd2db5ec62"
+      "5da259712f86a8dc3d241e9688c82391b7bf1ebc358311f55c26be910b76f61fea408ed6"
+      "92f1a9578a622c82c0fcf6f69ef3670e38bfc90f63da4f3bbbd088c8ae7a3c5a55e66f64"
+      "74d562d32cce7b7edd7cf0149ca0e96cb6525e81fbba815a8f12748e34e5135f572b2e17"
+      "b7ba430081597e6fb9033c005884d5935118c60d75b010f6fece7ecdcc1cb7d58d138969"
+      "3d43377f4f3de949cb1e4105e792b96d7f04b0cd262ac33cffc5a890d267425e61c19e93"
+      "63550f2285",
+      &other_rsa_modulus));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> other_rsa,
+                                   CreatePublicKeyRSA(other_rsa_modulus, e));
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      bool collision,
+      PrivacyPassTruncatedTokenKeyIdCollision(rsa.get(), other_rsa.get()));
+  EXPECT_FALSE(collision);
+}
+
+TEST(AnonymousTokensCryptoUtilsTest,
+     PrivacyPassTruncatedTokenKeyIdCollisionTrue) {
+  std::string rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab43c0df3a8c12993af1"
+      "2b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a224d6b02f09e5c374d0"
+      "cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5e794fc98a313927687"
+      "9757ce453b526ef9bf6ceb99979b8423b90f4461a22af37aab0cf5733f7597abe44d31c7"
+      "32db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbcd78a337d17b1dba9e8"
+      "28bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2073fe49740c01f00e1"
+      "09106066983d21e5f83f086e2e823c879cd43cef700d2a352a9babd612d03cad02db134b"
+      "7e225a5f",
+      &rsa_modulus));
+  std::string e;
+  ASSERT_TRUE(absl::HexStringToBytes("010001", &e));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> rsa,
+                                   CreatePublicKeyRSA(rsa_modulus, e));
+
+  std::string other_rsa_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "940cceb86288b7df975954a3ccbbd898ac347eeb8f0f783b0514657f263886a1cb2ed01d"
+      "2e109acf64d6939594c6e4ac8fdb3db4feee92b1848cc4a0d813b7f04045e63bf32d52f2"
+      "145ba1938429b339a7bc5c935e4a93c8cd84b7f4a75199c92cd88648efcb1f54d9afcbd2"
+      "09ac1281c82f5e1cfdc0443772daa83f12c7c4873194b224c10d8be69f186b7ebb98073d"
+      "c04c684f39a1244811fc832606e026d2692ccd979c7c7ea0f7e5e8a9adad6232639dd872"
+      "f5dd133aa85e3a78816e6ed2ec9a9c775a2030b1a3251cb779e5d3c897c97da68046d5e3"
+      "0952c1730192cc4d3b70d2fb368b25cea7fe4b4ea5f591a8378423229c3f94bcc5c67f0c"
+      "3bf873af",
+      &other_rsa_modulus));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<RSA> other_rsa,
+                                   CreatePublicKeyRSA(other_rsa_modulus, e));
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      bool collision,
+      PrivacyPassTruncatedTokenKeyIdCollision(rsa.get(), other_rsa.get()));
+  EXPECT_TRUE(collision);
+}
+
 using CreateTestKeyPairFunction = std::pair<
     anonymous_tokens::TestRsaPublicKey, anonymous_tokens::TestRsaPrivateKey>();
 

@@ -24,6 +24,7 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/base.h>
+#include <openssl/rsa.h>  // Callers need this header included.
 
 namespace anonymous_tokens {
 
