@@ -412,8 +412,8 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, GeoHintEmptyOk) {
   EXPECT_TRUE(GeoHint::FromExtension(ext).ok());
 }
 
-TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, ServiceTypeRoundTrip) {
-  ServiceType st{.service_type_id = 0x01};
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, ChromeServiceTypeRoundTrip) {
+  ServiceType st{.service_type_id = ServiceType::kChromeIpBlinding};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, st.AsExtension());
   EXPECT_EQ(ext.extension_type, 0xF001);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ServiceType st2,
@@ -422,15 +422,36 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, ServiceTypeRoundTrip) {
   EXPECT_EQ(st2.service_type, "chromeipblinding");
 }
 
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, CronetServiceTypeRoundTrip) {
+  ServiceType st{.service_type_id = ServiceType::kCronetIpBlinding};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, st.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF001);
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ServiceType st2,
+                                   ServiceType::FromExtension(ext));
+  EXPECT_EQ(st.service_type_id, st2.service_type_id);
+  EXPECT_EQ(st2.service_type, "cronetipblinding");
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, WebviewServiceTypeRoundTrip)
+{
+  ServiceType st{.service_type_id = ServiceType::kWebviewIpBlinding};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, st.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF001);
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ServiceType st2,
+                                   ServiceType::FromExtension(ext));
+  EXPECT_EQ(st.service_type_id, st2.service_type_id);
+  EXPECT_EQ(st2.service_type, "webviewipblinding");
+}
+
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, WrongExtId) {
-  ServiceType st{.service_type_id = 0x01};
+  ServiceType st{.service_type_id = ServiceType::kChromeIpBlinding};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, st.AsExtension());
   ext.extension_type = 0xF002;
   EXPECT_FALSE(ServiceType::FromExtension(ext).ok());
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, WrongServiceTypeId) {
-  ServiceType st{.service_type_id = 0x02};
+  ServiceType st{.service_type_id = 0x04};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, st.AsExtension());
   EXPECT_EQ(ext.extension_type, 0xF001);
   EXPECT_FALSE(ServiceType::FromExtension(ext).ok());

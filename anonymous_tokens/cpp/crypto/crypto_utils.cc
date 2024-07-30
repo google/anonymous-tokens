@@ -30,7 +30,9 @@
 #include "absl/strings/string_view.h"
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
+#include <openssl/base.h>
 #include <openssl/bytestring.h>
+#include <openssl/digest.h>
 #include <openssl/err.h>
 #include <openssl/hkdf.h>
 #include <openssl/mem.h>
@@ -613,6 +615,29 @@ absl::StatusOr<std::string> RsaSsaPssPublicKeyToDerEncoding(const RSA* rsa) {
   OPENSSL_free(rsa_ssa_pss_public_key_der);
   // Return the DER encoding as string.
   return rsa_ssa_pss_public_key_der_str;
+}
+
+absl::StatusOr<bool> PrivacyPassTruncatedTokenKeyIdCollision(
+    const RSA* public_key, const RSA* other_public_key) {
+  const EVP_MD* sha256 = EVP_sha256();
+  ANON_TOKENS_ASSIGN_OR_RETURN(std::string public_key_der,
+                               RsaSsaPssPublicKeyToDerEncoding(public_key));
+  ANON_TOKENS_ASSIGN_OR_RETURN(std::string token_key_id,
+                               ComputeHash(public_key_der, *sha256));
+  ANON_TOKENS_ASSIGN_OR_RETURN(
+      std::string other_public_key_der,
+      RsaSsaPssPublicKeyToDerEncoding(other_public_key));
+  ANON_TOKENS_ASSIGN_OR_RETURN(std::string other_token_key_id,
+                               ComputeHash(other_public_key_der, *sha256));
+  if (token_key_id.empty() || other_token_key_id.empty()) {
+    return absl::InternalError(
+        "Empty hash produced for inputted RSA public key.");
+  }
+  if (token_key_id[token_key_id.size() - 1] ==
+      other_token_key_id[other_token_key_id.size() - 1]) {
+    return true;
+  }
+  return false;
 }
 
 }  // namespace anonymous_tokens
