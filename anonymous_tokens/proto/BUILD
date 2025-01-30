@@ -1,7 +1,9 @@
-# Public protos for Anonymous Tokens service.
+load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto_library")
+load("@com_google_protobuf//bazel:java_proto_library.bzl", "java_proto_library")
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
 
+# Public protos for Anonymous Tokens service.
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_proto//proto:defs.bzl", "proto_library")
 
 package(default_visibility = ["//:__subpackages__"])
 

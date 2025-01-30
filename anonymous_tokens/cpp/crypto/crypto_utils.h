@@ -44,7 +44,7 @@ namespace internal {
 // out_len_bytes and later truncates the output to out_len_bytes. This is done
 // so that the output is indifferentiable from truly random bytes.
 // https://cfrg.github.io/draft-irtf-cfrg-hash-to-curve/draft-irtf-cfrg-hash-to-curve.html#name-hashing-to-a-finite-field
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> PublicMetadataHashWithHKDF(
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > PublicMetadataHashWithHKDF(
     absl::string_view public_metadata, absl::string_view rsa_modulus_str,
     size_t out_len_bytes);
 
@@ -75,14 +75,14 @@ typedef std::unique_ptr<EVP_MD_CTX, EvpMdCtxDeleter> EvpMdCtxPtr;
 absl::StatusOr<BnCtxPtr> GetAndStartBigNumCtx();
 
 // Creates a new BIGNUM.
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> NewBigNum();
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > NewBigNum();
 
 // Converts a BIGNUM to string.
 absl::StatusOr<std::string> BignumToString(const BIGNUM& big_num,
                                            size_t output_len);
 
 // Converts a string to BIGNUM.
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> StringToBignum(
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > StringToBignum(
     absl::string_view input_str);
 
 // Retrieve error messages from OpenSSL.
@@ -101,10 +101,10 @@ std::string EncodeMessagePublicMetadata(absl::string_view message,
                                         absl::string_view public_metadata);
 
 // Compute 2^(x - 1/2).
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> GetRsaSqrtTwo(int x);
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > GetRsaSqrtTwo(int x);
 
 // Compute compute 2^x.
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> ComputePowerOfTwo(int x);
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > ComputePowerOfTwo(int x);
 
 // ComputeHash sub-routine used during blindness and verification of RSA blind
 // signatures protocol with or without public metadata.
@@ -113,14 +113,14 @@ absl::StatusOr<std::string> ComputeHash(absl::string_view input,
 
 // Computes the Carmichael LCM given phi(p) and phi(q) where N = p*q is a safe
 // RSA modulus.
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> ComputeCarmichaelLcm(
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > ComputeCarmichaelLcm(
     const BIGNUM& phi_p, const BIGNUM& phi_q, BN_CTX& bn_ctx);
 
 // Create bssl::UniquePtr<RSA> representing a RSA private key.
 //
 // Note that this method should not be used to create a key with public exponent
 // greater than 2^32.
-absl::StatusOr<bssl::UniquePtr<RSA>> CreatePrivateKeyRSA(
+absl::StatusOr<bssl::UniquePtr<RSA> > CreatePrivateKeyRSA(
     absl::string_view rsa_modulus, absl::string_view public_exponent,
     absl::string_view private_exponent, absl::string_view p,
     absl::string_view q, absl::string_view dp, absl::string_view dq,
@@ -130,7 +130,7 @@ absl::StatusOr<bssl::UniquePtr<RSA>> CreatePrivateKeyRSA(
 //
 // Note that this method should not be used to create a key with public exponent
 // greater than 2^32.
-absl::StatusOr<bssl::UniquePtr<RSA>> CreatePublicKeyRSA(
+absl::StatusOr<bssl::UniquePtr<RSA> > CreatePublicKeyRSA(
     absl::string_view rsa_modulus, absl::string_view public_exponent);
 
 // Create bssl::UniquePtr<RSA> representing a RSA public key derived using
@@ -140,7 +140,7 @@ absl::StatusOr<bssl::UniquePtr<RSA>> CreatePublicKeyRSA(
 // is not used in any computations.
 //
 // Setting "use_rsa_public_exponent" to true is deprecated.
-absl::StatusOr<bssl::UniquePtr<RSA>> CreatePublicKeyRSAWithPublicMetadata(
+absl::StatusOr<bssl::UniquePtr<RSA> > CreatePublicKeyRSAWithPublicMetadata(
     const BIGNUM& rsa_modulus, const BIGNUM& public_exponent,
     absl::string_view public_metadata, bool use_rsa_public_exponent);
 
@@ -151,7 +151,7 @@ absl::StatusOr<bssl::UniquePtr<RSA>> CreatePublicKeyRSAWithPublicMetadata(
 // is not used in any computations.
 //
 // Setting "use_rsa_public_exponent" to true is deprecated.
-absl::StatusOr<bssl::UniquePtr<RSA>> CreatePublicKeyRSAWithPublicMetadata(
+absl::StatusOr<bssl::UniquePtr<RSA> > CreatePublicKeyRSAWithPublicMetadata(
     absl::string_view rsa_modulus, absl::string_view public_exponent,
     absl::string_view public_metadata, bool use_rsa_public_exponent);
 
@@ -161,7 +161,7 @@ absl::StatusOr<bssl::UniquePtr<RSA>> CreatePublicKeyRSAWithPublicMetadata(
 //
 // Empty public metadata is considered to be a valid value for public_metadata
 // and will output a valid exponent.
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> ComputeExponentWithPublicMetadata(
+absl::StatusOr<bssl::UniquePtr<BIGNUM> > ComputeExponentWithPublicMetadata(
     const BIGNUM& n, absl::string_view public_metadata);
 
 // Computes exponent by multiplying the public exponent e with the
@@ -173,7 +173,7 @@ absl::StatusOr<bssl::UniquePtr<BIGNUM>> ComputeExponentWithPublicMetadata(
 // and will output an exponent different than `e` as well.
 //
 // This function is now deprecated.
-absl::StatusOr<bssl::UniquePtr<BIGNUM>>
+absl::StatusOr<bssl::UniquePtr<BIGNUM> >
 ComputeExponentWithPublicMetadataAndPublicExponent(
     const BIGNUM& n, const BIGNUM& e, absl::string_view public_metadata);
 

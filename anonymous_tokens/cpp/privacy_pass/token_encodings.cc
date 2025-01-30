@@ -425,7 +425,7 @@ absl::StatusOr<DebugMode> DebugMode::FromExtension(const Extension& ext) {
     return absl::InvalidArgumentError(
         "[DebugMode] failed to read len from extension");
   }
-  if (dm.mode != kProd && dm.mode != kDebug) {
+  if (dm.mode != kProd && dm.mode != kDebug && dm.mode != kAdmin) {
     return absl::InvalidArgumentError(
         absl::StrCat("[DebugMode] invalid mode: ", dm.mode));
   }
