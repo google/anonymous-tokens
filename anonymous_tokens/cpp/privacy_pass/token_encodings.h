@@ -130,6 +130,7 @@ struct DebugMode {
   typedef uint8_t Mode;
   static constexpr Mode kProd = 0x00;
   static constexpr Mode kDebug = 0x01;
+  static constexpr Mode kAdmin = 0x02;
   Mode mode;
 
   absl::StatusOr<Extension> AsExtension() const;
