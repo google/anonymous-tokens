@@ -727,8 +727,10 @@ absl::Status ValidateExtensionsValues(const Extensions& extensions,
           }
         }
         for (const char& c : geo_hint->region) {
-          if (!absl::ascii_isupper(c) && !absl::ascii_ispunct(c)) {
-            return absl::InvalidArgumentError("Region is not uppercase");
+          if (!absl::ascii_isupper(c) && !absl::ascii_ispunct(c) &&
+              !absl::ascii_isdigit(c)) {
+            return absl::InvalidArgumentError(
+                "Region is not ascii uppercase, numerals, or punctuation");
           }
         }
         break;
