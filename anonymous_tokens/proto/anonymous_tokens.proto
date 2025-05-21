@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// LINT: LEGACY_NAMES
 syntax = "proto3";
 
 package anonymous_tokens;
@@ -25,7 +26,7 @@ message Timestamp {
 }
 
 // Different use cases for the Anonymous Tokens service.
-// Next ID: 14
+// Next ID: 15
 enum AnonymousTokensUseCase {
   // Test use cases here.
   ANONYMOUS_TOKENS_USE_CASE_UNDEFINED = 0;
@@ -42,7 +43,8 @@ enum AnonymousTokensUseCase {
   CHROME_IP_BLINDING_DARKLAUNCH = 10;
   ANDROID_IP_BLINDING = 11;
   NOCTOGRAM_LENS_PPISSUER = 12;
-  PIXEL_PRIVATE_INFERENCE = 13;
+  PRIVATE_ARATEA = 14;
+  reserved 13;
 }
 
 // An enum describing different types of available hash functions.
