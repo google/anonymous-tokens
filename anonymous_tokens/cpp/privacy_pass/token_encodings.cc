@@ -674,7 +674,7 @@ absl::StatusOr<ExtendedTokenRequest> UnmarshalExtendedTokenRequest(
 }
 
 absl::Status ValidateExtensionsOrderAndValues(
-    const Extensions& extensions, absl::Span<uint16_t> expected_types,
+    const Extensions& extensions, absl::Span<const uint16_t> expected_types,
     absl::Time now) {
   if (expected_types.size() != extensions.extensions.size()) {
     return absl::InvalidArgumentError(

@@ -259,7 +259,7 @@ UnmarshalExtendedTokenRequest(absl::string_view extended_token_request);
 // This method takes in an Extensions struct, checks that the ordering matches
 // the given ordering in expected_types, and validates extension values.
 absl::Status ValidateExtensionsOrderAndValues(
-    const Extensions& extensions, absl::Span<uint16_t> expected_types,
+    const Extensions& extensions, absl::Span<const uint16_t> expected_types,
     absl::Time now);
 
 // This method takes in an Extensions struct and validates extension values by
