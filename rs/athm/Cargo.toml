@@ -20,5 +20,5 @@ sec1 = { version = "0.7", features = ["point"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
-name = "ahtm_benchmarks"
+name = "athm_benchmarks"
 harness = false
