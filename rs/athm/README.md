@@ -54,11 +54,12 @@ let metadata = verify_token(&private_key, &token, &params).unwrap();
 assert_eq!(metadata, 2);
 ```
 
-## ⚠️ Warning
-
-**EXPERIMENTAL SOFTWARE** - Not audited, not for production use.
-
 ## Technical Details
 
 - Uses P-256 elliptic curves and constant-time operations
 - Based on the ATHM specification
+
+## Disclaimers
+This is not an officially supported Google product. The software is provided as-is without any guarantees or warranties, express or implied.
+
+
