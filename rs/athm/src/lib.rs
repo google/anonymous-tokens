@@ -77,8 +77,6 @@ struct Transcript {
     hasher: Sha256,
 }
 
-// TODO(samschlesinger) add info string to spec and here for cleaner domain separation
-
 impl Transcript {
     /// Create a new transcript
     fn new() -> Self {
@@ -1034,8 +1032,6 @@ pub fn verify_token(private_key: &PrivateKey, token: &Token, params: &Params) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // TODO(samschlesinger) when P256 test vectors are published, incorporate tests for them
 
     fn test_params() -> Params {
         Params::new(DEFAULT_N_BUCKETS).unwrap()
