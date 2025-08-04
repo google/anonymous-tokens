@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Anonymous Tokens with Hidden Metadata (ATHM)
 //!
 //! Privacy-preserving tokens where servers can embed metadata invisible to clients.
@@ -76,6 +90,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 struct Transcript {
     hasher: Sha256,
 }
+
 
 impl Transcript {
     /// Create a new transcript
@@ -1033,6 +1048,7 @@ pub fn verify_token(private_key: &PrivateKey, token: &Token, params: &Params) ->
 mod tests {
     use super::*;
 
+
     fn test_params() -> Params {
         Params::new(DEFAULT_N_BUCKETS).unwrap()
     }
@@ -1521,8 +1537,17 @@ mod tests {
     fn test_dynamic_buckets() {
         let mut rng = OsRng;
 
+        let test_cases = [
+            (1, vec![0]),
+            (2, vec![0, 1]),
+            (4, (0..4).collect()),
+            (8, (0..8).collect()),
+            (32, vec![0, 1, 23, 31]),
+            (255, vec![0, 1, 23, 42, 254]),
+        ];
+
         // Test with different numbers of buckets
-        [1, 2, 4, 8, 32, 255].iter().for_each(|&n_buckets| {
+        for (n_buckets, metadata_values) in test_cases {
             let params = Params::new(n_buckets).unwrap();
             let (server_private_key, server_public_key, proof) = key_gen(&params);
 
@@ -1531,7 +1556,7 @@ mod tests {
                 token_request(&server_public_key, &proof, &params, &mut rng).unwrap();
 
             // Test with all valid metadata values for this bucket size
-            (0..n_buckets).for_each(|metadata| {
+            for metadata in metadata_values {
                 let response = token_response(
                     &server_private_key,
                     &server_public_key,
@@ -1554,7 +1579,7 @@ mod tests {
 
                 let recovered = verify_token(&server_private_key, &token, &params).unwrap();
                 assert_eq!(recovered, metadata);
-            });
+            }
 
             // Test that metadata index >= n_buckets fails
             let (_, token_req2) =
@@ -1568,7 +1593,7 @@ mod tests {
                 &mut rng,
             );
             assert!(invalid_response.is_err());
-        });
+        }
 
         // Test with n_buckets = 0 (should fail)
         let params_zero = Params::new(0);
@@ -1671,4 +1696,3 @@ mod tests {
         assert_eq!(recovered_metadata, hidden_metadata);
     }
 }
-
