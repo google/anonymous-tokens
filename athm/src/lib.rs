@@ -26,14 +26,13 @@
 //!
 //! ```
 //! use athm::*;
-//! use rand_core::OsRng;
 //!
 //! // Setup with 4 metadata buckets (e.g., risk levels 0-3)
 //! let params = Params::new(4).unwrap();
-//! let (private_key, public_key, proof) = key_gen(&params);
+//! let mut rng = rand::thread_rng();
+//! let (private_key, public_key, proof) = key_gen(&params, &mut rng);
 //!
 //! // Client creates blinded request
-//! let mut rng = OsRng;
 //! let (context, request) = token_request(&public_key, &proof, &params, &mut rng).unwrap();
 //!
 //! // Server responds with hidden metadata
@@ -73,7 +72,7 @@ use p256::{
     },
     NistP256, NonZeroScalar, ProjectivePoint, Scalar,
 };
-use rand_core::{CryptoRngCore, OsRng};
+use rand_core::CryptoRngCore;
 use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -681,17 +680,19 @@ pub fn verify_public_key_proof(pk: &PublicKey, proof: &PublicKeyProof, params: &
 /// ```
 /// use athm::{key_gen, Params};
 /// let params = Params::new(4).unwrap();
-/// let (private_key, public_key, proof) = key_gen(&params);
+/// let mut rng = rand::thread_rng();
+/// let (private_key, public_key, proof) = key_gen(&params, &mut rng);
 /// ```
-pub fn key_gen(params: &Params) -> (PrivateKey, PublicKey, PublicKeyProof) {
-    let mut rng = OsRng;
-
+pub fn key_gen<R: CryptoRngCore>(
+    params: &Params,
+    rng: &mut R,
+) -> (PrivateKey, PublicKey, PublicKeyProof) {
     // Generate random scalars
-    let x = random_scalar(&mut rng);
-    let y = random_non_zero_scalar(&mut rng);
-    let z = random_non_zero_scalar(&mut rng);
-    let r_x = random_scalar(&mut rng);
-    let r_y = random_scalar(&mut rng);
+    let x = random_scalar(rng);
+    let y = random_non_zero_scalar(rng);
+    let z = random_non_zero_scalar(rng);
+    let r_x = random_scalar(rng);
+    let r_y = random_scalar(rng);
 
     // Compute public key elements
     let big_z = params.big_g * z;
@@ -699,7 +700,7 @@ pub fn key_gen(params: &Params) -> (PrivateKey, PublicKey, PublicKeyProof) {
     let big_c_y = (params.big_g * y) + (params.big_h * r_y);
 
     // Create proof of knowledge for z
-    let pi = create_public_key_proof(&z, &big_z, params, &mut rng);
+    let pi = create_public_key_proof(&z, &big_z, params, rng);
 
     let private_key = PrivateKey { x, y, z, r_x, r_y };
     let public_key = PublicKey { big_z, big_c_x, big_c_y };
@@ -1056,7 +1057,8 @@ mod tests {
     #[test]
     fn test_key_gen() {
         let params = test_params();
-        let (private_key, public_key, _proof) = key_gen(&params);
+        let mut rng = rand::thread_rng();
+        let (private_key, public_key, _proof) = key_gen(&params, &mut rng);
 
         // Verify that the keys were generated
         assert!(!bool::from(private_key.x.is_zero()));
@@ -1085,7 +1087,8 @@ mod tests {
     #[test]
     fn test_verify_public_key_proof() {
         let params = test_params();
-        let (_, public_key, proof) = key_gen(&params);
+        let mut rng = rand::thread_rng();
+        let (_, public_key, proof) = key_gen(&params, &mut rng);
 
         // Verify that the proof is valid
         assert!(verify_public_key_proof(&public_key, &proof, &params));
@@ -1103,9 +1106,9 @@ mod tests {
 
     #[test]
     fn test_token_request() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (_, public_key, proof) = key_gen(&params);
+        let (_, public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a token request
         let result = token_request(&public_key, &proof, &params, &mut rng);
@@ -1129,9 +1132,9 @@ mod tests {
 
     #[test]
     fn test_token_response() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a token request from client
         let (_, token_req) = token_request(&server_public_key, &proof, &params, &mut rng).unwrap();
@@ -1183,9 +1186,9 @@ mod tests {
 
     #[test]
     fn test_verify_issuance_proof() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a token request from client
         let (_, token_req) = token_request(&server_public_key, &proof, &params, &mut rng).unwrap();
@@ -1231,11 +1234,11 @@ mod tests {
 
     #[test]
     fn test_end_to_end_protocol() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
 
         // Server generates keys
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Client creates token request
         let (context, token_req) =
@@ -1291,9 +1294,9 @@ mod tests {
 
     #[test]
     fn test_verify_token_edge_cases() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a valid token
         let (context, token_req) =
@@ -1330,9 +1333,9 @@ mod tests {
 
     #[test]
     fn test_tampered_tokens() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a valid token
         let (context, token_req) =
@@ -1420,9 +1423,9 @@ mod tests {
 
     #[test]
     fn test_tokens_from_different_sessions() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Session 1: Create first token
         let (context1, token_req1) =
@@ -1494,9 +1497,9 @@ mod tests {
 
     #[test]
     fn test_forged_tokens() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
-        let (server_private_key, server_public_key, _proof) = key_gen(&params);
+        let (server_private_key, server_public_key, _proof) = key_gen(&params, &mut rng);
 
         // Attempt 1: Completely random token
         let forged = Token {
@@ -1535,7 +1538,7 @@ mod tests {
 
     #[test]
     fn test_dynamic_buckets() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
 
         let test_cases = [
             (1, vec![0]),
@@ -1549,7 +1552,7 @@ mod tests {
         // Test with different numbers of buckets
         for (n_buckets, metadata_values) in test_cases {
             let params = Params::new(n_buckets).unwrap();
-            let (server_private_key, server_public_key, proof) = key_gen(&params);
+            let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
             // Create token request
             let (context, token_req) =
@@ -1608,7 +1611,8 @@ mod tests {
         let y = decode_scalar(&bytes).0.unwrap();
         assert_eq!(x, y);
 
-        let x = Scalar::random(OsRng);
+        let mut rng = rand::thread_rng();
+        let x = Scalar::random(&mut rng);
         bytes.clear();
         encode_scalar(&x, &mut bytes);
         let y = decode_scalar(&bytes).0.unwrap();
@@ -1623,7 +1627,8 @@ mod tests {
         let y = decode_point(&bytes).0.unwrap();
         assert_eq!(x, y);
 
-        let x = generator_g() * Scalar::random(OsRng);
+        let mut rng = rand::thread_rng();
+        let x = generator_g() * Scalar::random(&mut rng);
         bytes.clear();
         encode_point(&x, &mut bytes);
         let y = decode_point(&bytes).0.unwrap();
@@ -1632,14 +1637,14 @@ mod tests {
 
     #[test]
     fn test_end_to_end_protocol_serialized() {
-        let mut rng = OsRng;
+        let mut rng = rand::thread_rng();
         let params = test_params();
         let mut params_bytes = vec![];
         params.encode(&mut params_bytes);
 
         // Server generates keys
         let params = Params::decode(&params_bytes).unwrap();
-        let (server_private_key, server_public_key, proof) = key_gen(&params);
+        let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
         let mut server_private_key_bytes = vec![];
         server_private_key.encode(&mut server_private_key_bytes);
         let mut server_public_key_bytes = vec![];
