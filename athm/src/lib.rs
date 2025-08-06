@@ -147,6 +147,18 @@ fn encode_scalar(scalar: &Scalar, out: &mut Vec<u8>) {
     out.extend_from_slice(scalar.to_bytes().as_ref());
 }
 
+// Trait for anything that can be encoded into a byte vector.
+pub trait Encodable {
+    fn encode(&self, out: &mut Vec<u8>);
+}
+
+// Trait for anything that can be decoded from a byte slice.
+pub trait Decodable {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str>
+    where
+        Self: Sized;
+}
+
 // Helper to decode a Scalar from a byte slice. Returns a CtOption of the resulting scalar if successful, and a new slice of the remaining input.
 // Panics if the input is too small.
 fn decode_scalar<'a>(input: &'a [u8]) -> (CtOption<Scalar>, &'a [u8]) {
@@ -154,6 +166,25 @@ fn decode_scalar<'a>(input: &'a [u8]) -> (CtOption<Scalar>, &'a [u8]) {
         Scalar::from_repr(*FieldBytes::<NistP256>::from_slice(&input[..SCALAR_SIZE])),
         &input[SCALAR_SIZE..],
     )
+}
+
+impl Encodable for Scalar {
+    fn encode(&self, out: &mut Vec<u8>) {
+        encode_scalar(&self, out);
+    }
+}
+
+impl Decodable for Scalar {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+        if input.len() < SCALAR_SIZE {
+            return Err(INPUT_TOO_SHORT);
+        }
+        let (scalar, _) = decode_scalar(input);
+        if !bool::from(scalar.is_some()) {
+            return Err(DECODING_ERROR);
+        }
+        Ok(scalar.unwrap())
+    }
 }
 
 // Helper to encode a ProjectivePoint and append it to a byte vector.
@@ -165,6 +196,25 @@ fn encode_point(point: &ProjectivePoint, out: &mut Vec<u8>) {
 // Panics if the input is too small.
 fn decode_point<'a>(input: &'a [u8]) -> (CtOption<ProjectivePoint>, &'a [u8]) {
     (ProjectivePoint::from_bytes((&input[..POINT_SIZE]).into()), &input[POINT_SIZE..])
+}
+
+impl Encodable for ProjectivePoint {
+    fn encode(&self, out: &mut Vec<u8>) {
+        encode_point(&self, out);
+    }
+}
+
+impl Decodable for ProjectivePoint {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+        if input.len() < POINT_SIZE {
+            return Err(INPUT_TOO_SHORT);
+        }
+        let (point, _) = decode_point(input);
+        if !bool::from(point.is_some()) {
+            return Err(DECODING_ERROR);
+        }
+        Ok(point.unwrap())
+    }
 }
 
 /// Server's private key for the ATHM protocol
@@ -184,19 +234,23 @@ impl PrivateKey {
     fn encoded_size() -> usize {
         5 * SCALAR_SIZE
     }
+}
 
+impl Encodable for PrivateKey {
     // Encode a private key and append the result to a byte vector.
-    pub fn encode(&self, out: &mut Vec<u8>) {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_scalar(&self.x, out);
         encode_scalar(&self.y, out);
         encode_scalar(&self.z, out);
         encode_scalar(&self.r_x, out);
         encode_scalar(&self.r_y, out);
     }
+}
 
+impl Decodable for PrivateKey {
     // Decode a private key from a byte slice. Returns a CtOption with the resulting private key if successful, and None otherwise.
     // Panics if the input is smaller than 5 * SCALAR_SIZE.
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
@@ -236,14 +290,18 @@ impl PublicKey {
     fn encoded_size() -> usize {
         3 * POINT_SIZE
     }
+}
 
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for PublicKey {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_point(&self.big_z, out);
         encode_point(&self.big_c_x, out);
         encode_point(&self.big_c_y, out);
     }
+}
 
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+impl Decodable for PublicKey {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
@@ -274,13 +332,17 @@ impl PublicKeyProof {
     fn encoded_size() -> usize {
         2 * SCALAR_SIZE
     }
+}
 
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for PublicKeyProof {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_scalar(&self.e, out);
         encode_scalar(&self.a_z, out);
     }
+}
 
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+impl Decodable for PublicKeyProof {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
@@ -310,13 +372,17 @@ impl TokenContext {
     fn encoded_size() -> usize {
         2 * SCALAR_SIZE
     }
+}
 
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for TokenContext {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_scalar(&self.r, out);
         encode_scalar(&self.tc, out);
     }
+}
 
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+impl Decodable for TokenContext {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
@@ -345,12 +411,16 @@ impl TokenRequest {
     fn encoded_size() -> usize {
         1 * POINT_SIZE
     }
+}
 
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for TokenRequest {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_point(&self.big_t, out);
     }
+}
 
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+impl Decodable for TokenRequest {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
@@ -376,12 +446,8 @@ pub struct IssuanceProof {
     pub a_w: Scalar,
 }
 
-impl IssuanceProof {
-    fn encoded_size(params: &Params) -> usize {
-        3 * SCALAR_SIZE + 1 * POINT_SIZE + 2 * params.n_buckets as usize * SCALAR_SIZE
-    }
-
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for IssuanceProof {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_point(&self.big_c, out);
         for e in &self.e_vec {
             encode_scalar(&e, out);
@@ -392,6 +458,12 @@ impl IssuanceProof {
         encode_scalar(&self.a_d, out);
         encode_scalar(&self.a_rho, out);
         encode_scalar(&self.a_w, out);
+    }
+}
+
+impl IssuanceProof {
+    fn encoded_size(params: &Params) -> usize {
+        3 * SCALAR_SIZE + 1 * POINT_SIZE + 2 * params.n_buckets as usize * SCALAR_SIZE
     }
 
     pub fn decode<'a>(input: &'a [u8], params: &Params) -> Result<Self, &'static str> {
@@ -446,19 +518,21 @@ pub struct TokenResponse {
     pub issuance_proof: IssuanceProof,
 }
 
-impl TokenResponse {
-    fn encoded_size(params: &Params) -> usize {
-        1 * SCALAR_SIZE + 2 * POINT_SIZE + IssuanceProof::encoded_size(params)
-    }
-
+impl Encodable for TokenResponse {
     // Encodes a response and appends the result to the given byte vector.
-    pub fn encode(&self, out: &mut Vec<u8>) {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_point(&self.big_u, out);
         encode_point(&self.big_v, out);
         encode_scalar(&self.ts, out);
         self.issuance_proof.encode(out);
     }
+}
 
+// TokenResponse does not implement Decodable because it needs the params to decode.
+impl TokenResponse {
+    fn encoded_size(params: &Params) -> usize {
+        1 * SCALAR_SIZE + 2 * POINT_SIZE + IssuanceProof::encoded_size(params)
+    }
     // Decodes a response from the given byte slice.
     pub fn decode<'a>(input: &'a [u8], params: &Params) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size(params) {
@@ -499,14 +573,18 @@ impl Token {
     fn encoded_size() -> usize {
         1 * SCALAR_SIZE + 2 * POINT_SIZE
     }
+}
 
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for Token {
+    fn encode(&self, out: &mut Vec<u8>) {
         encode_scalar(&self.t, out);
         encode_point(&self.big_p, out);
         encode_point(&self.big_q, out);
     }
+}
 
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+impl Decodable for Token {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
@@ -563,16 +641,20 @@ impl Params {
     fn encoded_size() -> usize {
         1 + 2 * POINT_SIZE
     }
+}
 
-    pub fn encode(&self, out: &mut Vec<u8>) {
+impl Encodable for Params {
+    fn encode(&self, out: &mut Vec<u8>) {
         out.push(self.n_buckets);
         encode_point(&self.big_g, out);
         encode_point(&self.big_h, out);
     }
+}
 
+impl Decodable for Params {
     /// Decode parameters from the given byte slice.
     /// Returns an error if the decoding fails or the provided slice is too short.
-    pub fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
+    fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
         }
