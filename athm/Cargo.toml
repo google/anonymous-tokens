@@ -11,6 +11,7 @@ p256 = { version = "0.13.2", features = ["arithmetic", "expose-field", "hash2cur
 elliptic-curve = { version = "0.13", features = ["arithmetic", "digest", "sec1"] }
 subtle = "2.6.1"
 sha2 = "0.10"
+rand = { version = "0.8", features = ["std"] }
 rand_core = { version = "0.6", features = ["std"] }
 digest = "0.10"
 zeroize = { version = "1.7", features = ["derive"] }
