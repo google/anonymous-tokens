@@ -25,7 +25,8 @@ impl<T: Encodable> ToHex for T {
 
 fn main() {
     let n_buckets = 4;
-    let params = Params::new(n_buckets).unwrap();
+    let deployment_id = b"test_vector_deployment_id";
+    let params = Params::new(n_buckets, deployment_id.into()).unwrap();
 
     let mut test_vectors = vec![];
 
@@ -37,6 +38,7 @@ fn main() {
             ("n_buckets", "4".to_string()),
             ("generator_g", params.big_g.to_hex()),
             ("generator_h", params.big_h.to_hex()),
+            ("deployment_id", std::str::from_utf8(&params.deployment_id).unwrap().into()),
         ]),
     });
 

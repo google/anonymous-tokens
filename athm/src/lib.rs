@@ -28,7 +28,7 @@
 //! use athm::*;
 //!
 //! // Setup with 4 metadata buckets (e.g., risk levels 0-3)
-//! let params = Params::new(4).unwrap();
+//! let params = Params::new(4, b"deployment_id".to_vec()).unwrap();
 //! let mut rng = rand::thread_rng();
 //! let (private_key, public_key, proof) = key_gen(&params, &mut rng);
 //!
@@ -598,7 +598,7 @@ impl Decodable for Token {
 ///
 /// ```
 /// use athm::Params;
-/// let params = Params::new(4).unwrap(); // 4 metadata buckets
+/// let params = Params::new(4, b"deployment_id".to_vec()).unwrap(); // 4 metadata buckets
 /// ```
 #[derive(Debug, Clone)]
 pub struct Params {
@@ -623,8 +623,7 @@ impl Params {
     /// # Errors
     ///
     /// Returns error if n_buckets is 0
-    pub fn new(n_buckets: u8) -> Result<Self, &'static str> {
-        let deployment_id = b"".to_vec();
+    pub fn new(n_buckets: u8, deployment_id: Vec<u8>) -> Result<Self, &'static str> {
         if n_buckets == 0 {
             return Err("Number of buckets must be greater than 0");
         }
@@ -780,7 +779,7 @@ pub fn verify_public_key_proof(pk: &PublicKey, proof: &PublicKeyProof, params: &
 ///
 /// ```
 /// use athm::{key_gen, Params};
-/// let params = Params::new(4).unwrap();
+/// let params = Params::new(4, b"deployment_id".to_vec()).unwrap();
 /// let mut rng = rand::thread_rng();
 /// let (private_key, public_key, proof) = key_gen(&params, &mut rng);
 /// ```
@@ -1149,10 +1148,26 @@ pub fn verify_token(private_key: &PrivateKey, token: &Token, params: &Params) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TEST_DEPLOYMENT_ID: &[u8] = b"test_deployment_id";
 
 
     fn gen_test_params() -> Params {
-        Params::new(DEFAULT_N_BUCKETS).unwrap()
+        Params::new(DEFAULT_N_BUCKETS, TEST_DEPLOYMENT_ID.into()).unwrap()
+    }
+
+    #[test]
+    fn test_gen_params_fails_when_n_buckets_is_zero() {
+        let result = Params::new(0, TEST_DEPLOYMENT_ID.into());
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Number of buckets"));
+    }
+
+    #[test]
+    fn test_gen_params_fails_when_deployment_id_is_too_long() {
+        let long_deployment_id = b"a".repeat(256);
+        let result = Params::new(DEFAULT_N_BUCKETS, long_deployment_id);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().contains("Deployment ID"));
     }
 
     #[test]
@@ -1161,7 +1176,7 @@ mod tests {
         assert_eq!(params.n_buckets, DEFAULT_N_BUCKETS);
         assert_eq!(params.big_g, generator_g());
         assert_eq!(params.big_h, generator_h(&params.context_string()));
-        assert_eq!(params.deployment_id, b"");
+        assert_eq!(params.deployment_id, TEST_DEPLOYMENT_ID);
     }
 
     #[test]
@@ -1174,7 +1189,7 @@ mod tests {
         assert_eq!(params_deserialized.n_buckets, DEFAULT_N_BUCKETS);
         assert_eq!(params_deserialized.big_g, generator_g());
         assert_eq!(params_deserialized.big_h, generator_h(&params.context_string()));
-        assert_eq!(params_deserialized.deployment_id, b"");
+        assert_eq!(params_deserialized.deployment_id, TEST_DEPLOYMENT_ID);
     }
 
     #[test]
@@ -1695,7 +1710,7 @@ mod tests {
 
         // Test with different numbers of buckets
         for (n_buckets, metadata_values) in test_cases {
-            let params = Params::new(n_buckets).unwrap();
+            let params = Params::new(n_buckets, TEST_DEPLOYMENT_ID.into()).unwrap();
             let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
             // Create token request
@@ -1741,10 +1756,6 @@ mod tests {
             );
             assert!(invalid_response.is_err());
         }
-
-        // Test with n_buckets = 0 (should fail)
-        let params_zero = Params::new(0);
-        assert!(params_zero.is_err());
     }
 
     #[test]
