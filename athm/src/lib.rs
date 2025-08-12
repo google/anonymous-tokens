@@ -63,9 +63,7 @@ use elliptic_curve::generic_array::typenum::Unsigned;
 use elliptic_curve::hash2curve::{ExpandMsgXmd, GroupDigest};
 use p256::{
     elliptic_curve::{
-        bigint::U256,
         group::GroupEncoding,
-        ops::Reduce,
         sec1::{ModulusSize, ToEncodedPoint},
         subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption},
         Field, FieldBytes, FieldBytesSize, Group, PrimeField,
@@ -73,7 +71,7 @@ use p256::{
     NistP256, NonZeroScalar, ProjectivePoint, Scalar,
 };
 use rand_core::CryptoRngCore;
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A transcript for Fiat-Shamir transform
@@ -81,51 +79,43 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// This struct provides a clean abstraction for building transcripts
 /// and generating challenges in non-interactive zero-knowledge proofs.
 ///
-/// The transcript follows a similar pattern to anonymous-credit-tokens:
-/// - Elements are added with labels for clarity
-/// - Points and scalars are length-prefixed
-/// - Domain separation is applied when generating challenges
+//
 #[derive(Clone)]
 struct Transcript {
-    hasher: Sha256,
+    context_string: Vec<u8>,
+    messages: Vec<Vec<u8>>,
 }
-
 
 impl Transcript {
     /// Create a new transcript
-    fn new() -> Self {
-        Self { hasher: Sha256::new() }
+    fn new(context_string: Vec<u8>) -> Self {
+        Self { context_string: context_string, messages: Vec::new() }
     }
 
     /// Add a scalar to the transcript
-    fn append_scalar(&mut self, label: &[u8], scalar: &Scalar) {
+    fn append_scalar(&mut self, scalar: &Scalar) {
         let encoded = scalar.to_bytes();
-        self.hasher.update((label.len() as u16).to_be_bytes());
-        self.hasher.update(label);
-        self.hasher.update(&(encoded.len() as u16).to_be_bytes());
-        self.hasher.update(&scalar.to_bytes());
+        self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
+        self.messages.push(scalar.to_bytes().to_vec());
     }
 
     /// Add a point to the transcript
-    fn append_point(&mut self, label: &[u8], point: &ProjectivePoint) {
+    fn append_point(&mut self, point: &ProjectivePoint) {
         let encoded = point.to_affine().to_encoded_point(false);
-        self.hasher.update((label.len() as u16).to_be_bytes());
-        self.hasher.update(label);
-        self.hasher.update(&(encoded.len() as u16).to_be_bytes());
-        self.hasher.update(encoded.as_bytes());
+        self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
+        self.messages.push(encoded.to_bytes().to_vec());
     }
 
     /// Generate a challenge scalar with domain separation
-    fn challenge(&self, domain_separator: &str) -> Scalar {
-        let mut hasher = self.hasher.clone();
-        hasher.update((domain_separator.len() as u16).to_be_bytes());
-        hasher.update(domain_separator.as_bytes());
-        let hash = hasher.finalize();
+    fn challenge(&self, info: &[u8]) -> Scalar {
+        let msgs = &self.messages.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>();
+        let dsts = &[b"HashToScalar-".as_slice(), &self.context_string, info];
 
-        // Reduce the hash modulo the curve order
-        let hash_bytes: [u8; 32] = hash.into();
-        let hash_uint = U256::from_be_slice(&hash_bytes);
-        Scalar::reduce(hash_uint)
+        // Safety (see docs for ExpandMsgXmd)
+        // - destination is not empty
+        // - input is not empty and is less than or equal to u16::MAX bytes
+        // - input is not greater than 255 * 32
+        NistP256::hash_to_scalar::<ExpandMsgXmd<Sha256>>(msgs, dsts).unwrap()
     }
 }
 
@@ -618,6 +608,8 @@ pub struct Params {
     pub big_g: ProjectivePoint,
     /// Generator H (derived from G via hash-to-curve)
     pub big_h: ProjectivePoint,
+    /// Deployment ID
+    pub deployment_id: Vec<u8>,
 }
 
 impl Params {
@@ -626,20 +618,36 @@ impl Params {
     /// # Arguments
     ///
     /// * `n_buckets` - Number of metadata values (must be > 0)
+    /// * `deployment_id` - Deployment ID (must be less than 256 bytes)
     ///
     /// # Errors
     ///
     /// Returns error if n_buckets is 0
     pub fn new(n_buckets: u8) -> Result<Self, &'static str> {
+        let deployment_id = b"".to_vec();
         if n_buckets == 0 {
             return Err("Number of buckets must be greater than 0");
         }
+        if deployment_id.len() > 255 {
+            return Err("Deployment ID must be less than 256 bytes");
+        }
 
-        Ok(Params { n_buckets, big_g: generator_g(), big_h: generator_h() })
+        Ok(Params {
+            n_buckets,
+            big_g: generator_g(),
+            big_h: generator_h(&Self::build_context_string(n_buckets, &deployment_id)),
+            deployment_id: deployment_id,
+        })
     }
 
-    fn encoded_size() -> usize {
-        1 + 2 * POINT_SIZE
+    pub fn context_string(&self) -> Vec<u8> {
+        Self::build_context_string(self.n_buckets, &self.deployment_id)
+    }
+
+    fn build_context_string(n_buckets: u8, deployment_id: &[u8]) -> Vec<u8> {
+        let mut out = format!("ATHMV1-P256-{n_buckets}-").into_bytes();
+        out.extend_from_slice(deployment_id);
+        out
     }
 }
 
@@ -648,6 +656,8 @@ impl Encodable for Params {
         out.push(self.n_buckets);
         encode_point(&self.big_g, out);
         encode_point(&self.big_h, out);
+        out.push(self.deployment_id.len() as u8);
+        out.extend_from_slice(&self.deployment_id);
     }
 }
 
@@ -655,18 +665,30 @@ impl Decodable for Params {
     /// Decode parameters from the given byte slice.
     /// Returns an error if the decoding fails or the provided slice is too short.
     fn decode<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
-        if input.len() < Self::encoded_size() {
+        let min_size = 1 + 2 * POINT_SIZE + 1; // n_buckets, big_g, big_h, deployment_id len
+        if input.len() < min_size {
             return Err(INPUT_TOO_SHORT);
         }
         let (n_buckets, input) = (input[0], &input[1..]);
         let (big_g, input) = decode_point(input);
-        let (big_h, _input) = decode_point(input);
+        let (big_h, input) = decode_point(input);
 
         let is_some = big_g.is_some() & big_h.is_some();
         if !bool::from(is_some) {
             return Err(DECODING_ERROR);
         }
-        Ok(Self { n_buckets: n_buckets, big_g: big_g.unwrap(), big_h: big_h.unwrap() })
+
+        let deployment_id_len = input[0] as usize;
+        let input = &input[1..];
+        if input.len() < deployment_id_len {
+            return Err(INPUT_TOO_SHORT);
+        }
+        Ok(Self {
+            n_buckets: n_buckets,
+            big_g: big_g.unwrap(),
+            big_h: big_h.unwrap(),
+            deployment_id: input[..deployment_id_len].to_owned(),
+        })
     }
 }
 
@@ -676,22 +698,19 @@ fn generator_g() -> ProjectivePoint {
 }
 
 /// Get the generator H by hashing generator G
-fn generator_h() -> ProjectivePoint {
+fn generator_h(context_string: &[u8]) -> ProjectivePoint {
     let g = generator_g();
     let g_bytes = g.to_affine().to_encoded_point(false);
     let g_bytes = g_bytes.as_bytes();
 
     // Use hash-to-curve to derive H from G
-    let dst = b"P256_XMD:SHA-256_SSWU_RO_generatorH";
     let msg_array: &[&[u8]] = &[g_bytes];
-    let dst_array: &[&[u8]] = &[&dst[..]];
+    let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"generator_H"];
     // Safety (see docs for ExpandMsgXmd)
     // - destination is not empty
     // - input is not empty and is less than or equal to u16::MAX bytes
     // - input is not greater than 255 * 32
-    let h = NistP256::hash_from_bytes::<ExpandMsgXmd<Sha256>>(msg_array, dst_array).unwrap();
-
-    ProjectivePoint::from(h)
+    NistP256::hash_from_bytes::<ExpandMsgXmd<Sha256>>(msg_array, dst_array).unwrap()
 }
 
 /// Generate a random scalar
@@ -718,13 +737,13 @@ fn create_public_key_proof<R: CryptoRngCore>(
     let gamma_z = params.big_g * rho_z;
 
     // Build transcript and compute challenge
-    let mut transcript = Transcript::new();
-    transcript.append_point(b"G", &params.big_g);
-    transcript.append_point(b"Z", big_z);
-    transcript.append_point(b"gamma_z", &gamma_z);
+    let mut transcript = Transcript::new(params.context_string());
+    transcript.append_point(&params.big_g);
+    transcript.append_point(big_z);
+    transcript.append_point(&gamma_z);
 
     // Compute challenge e = HashToScalar(transcript, "KeyCommitments")
-    let e = transcript.challenge("KeyCommitments");
+    let e = transcript.challenge(b"KeyCommitments");
 
     // Compute a_z = rho_z - (e * z)
     let a_z = rho_z - (e * z);
@@ -741,13 +760,13 @@ pub fn verify_public_key_proof(pk: &PublicKey, proof: &PublicKeyProof, params: &
     let gamma_z = params.big_g * proof.a_z + pk.big_z * proof.e;
 
     // Build transcript and recompute challenge
-    let mut transcript = Transcript::new();
-    transcript.append_point(b"G", &params.big_g);
-    transcript.append_point(b"Z", &pk.big_z);
-    transcript.append_point(b"gamma_z", &gamma_z);
+    let mut transcript = Transcript::new(params.context_string());
+    transcript.append_point(&params.big_g);
+    transcript.append_point(&pk.big_z);
+    transcript.append_point(&gamma_z);
 
     // Recompute challenge e = HashToScalar(transcript, "KeyCommitments")
-    let e_verify = transcript.challenge("KeyCommitments");
+    let e_verify = transcript.challenge(b"KeyCommitments");
 
     // Verify that e_computed equals e using constant-time comparison
     proof.e.ct_eq(&e_verify).into()
@@ -886,36 +905,36 @@ fn create_issuance_proof<R: CryptoRngCore>(
     let c_w = *big_v * r_d + params.big_g * r_w;
 
     // Build challenge transcript
-    let mut transcript = Transcript::new();
+    let mut transcript = Transcript::new(params.context_string());
 
     // Add all elements according to spec
-    transcript.append_point(b"G", &params.big_g);
-    transcript.append_point(b"H", &params.big_h);
-    transcript.append_point(b"C_x", &public_key.big_c_x);
-    transcript.append_point(b"C_y", &public_key.big_c_y);
-    transcript.append_point(b"Z", &public_key.big_z);
-    transcript.append_point(b"U", big_u);
-    transcript.append_point(b"V", big_v);
+    transcript.append_point(&params.big_g);
+    transcript.append_point(&params.big_h);
+    transcript.append_point(&public_key.big_c_x);
+    transcript.append_point(&public_key.big_c_y);
+    transcript.append_point(&public_key.big_z);
+    transcript.append_point(big_u);
+    transcript.append_point(big_v);
 
     // Add ts (serialized scalar)
-    transcript.append_scalar(b"ts", ts);
+    transcript.append_scalar(ts);
 
     // Add T and C
-    transcript.append_point(b"T", big_t);
-    transcript.append_point(b"C", &big_c);
+    transcript.append_point(big_t);
+    transcript.append_point(&big_c);
 
     // Add all C_vec[i] to transcript
-    c_vec.iter().enumerate().for_each(|(i, c_i)| {
-        transcript.append_point(&format!("C_{}", i).as_bytes(), c_i);
+    c_vec.iter().for_each(|c_i| {
+        transcript.append_point(c_i);
     });
 
     // Add C_d, C_rho, C_w
-    transcript.append_point(b"C_d", &c_d);
-    transcript.append_point(b"C_rho", &c_rho);
-    transcript.append_point(b"C_w", &c_w);
+    transcript.append_point(&c_d);
+    transcript.append_point(&c_rho);
+    transcript.append_point(&c_w);
 
     // Hash to get challenge e
-    let e = transcript.challenge("TokenResponseProof");
+    let e = transcript.challenge(b"TokenResponseProof");
 
     // Calculate e_vec[hidden_metadata] = e - sum(other e_vec values)
     let e_sum: Scalar = e_vec.iter().sum();
@@ -1034,36 +1053,36 @@ pub fn verify_issuance_proof(
     let c_w = big_v * &proof.a_d + params.big_g * &proof.a_w + big_t * &e;
 
     // Build challenge transcript
-    let mut transcript = Transcript::new();
+    let mut transcript = Transcript::new(params.context_string());
 
     // Add elements according to spec
-    transcript.append_point(b"G", &params.big_g);
-    transcript.append_point(b"H", &params.big_h);
-    transcript.append_point(b"C_x", &pk.big_c_x);
-    transcript.append_point(b"C_y", &pk.big_c_y);
-    transcript.append_point(b"Z", &pk.big_z);
-    transcript.append_point(b"U", big_u);
-    transcript.append_point(b"V", big_v);
+    transcript.append_point(&params.big_g);
+    transcript.append_point(&params.big_h);
+    transcript.append_point(&pk.big_c_x);
+    transcript.append_point(&pk.big_c_y);
+    transcript.append_point(&pk.big_z);
+    transcript.append_point(big_u);
+    transcript.append_point(big_v);
 
     // Add ts (serialized scalar)
-    transcript.append_scalar(b"ts", ts);
+    transcript.append_scalar(ts);
 
     // Add T and C
-    transcript.append_point(b"T", big_t);
-    transcript.append_point(b"C", &proof.big_c);
+    transcript.append_point(big_t);
+    transcript.append_point(&proof.big_c);
 
     // Add all C_vec[i] to transcript
-    c_vec.iter().enumerate().for_each(|(i, c_i)| {
-        transcript.append_point(&format!("C_{}", i).as_bytes(), c_i);
+    c_vec.iter().for_each(|c_i| {
+        transcript.append_point(c_i);
     });
 
     // Add C_d, C_rho, C_w
-    transcript.append_point(b"C_d", &c_d);
-    transcript.append_point(b"C_rho", &c_rho);
-    transcript.append_point(b"C_w", &c_w);
+    transcript.append_point(&c_d);
+    transcript.append_point(&c_rho);
+    transcript.append_point(&c_w);
 
     // Hash to get challenge e_verify
-    let e_verify = transcript.challenge("TokenResponseProof");
+    let e_verify = transcript.challenge(b"TokenResponseProof");
 
     // Verify that computed e equals e_verify
     e.ct_eq(&e_verify).into()
@@ -1132,13 +1151,56 @@ mod tests {
     use super::*;
 
 
-    fn test_params() -> Params {
+    fn gen_test_params() -> Params {
         Params::new(DEFAULT_N_BUCKETS).unwrap()
     }
 
     #[test]
+    fn test_params() {
+        let params = gen_test_params();
+        assert_eq!(params.n_buckets, DEFAULT_N_BUCKETS);
+        assert_eq!(params.big_g, generator_g());
+        assert_eq!(params.big_h, generator_h(&params.context_string()));
+        assert_eq!(params.deployment_id, b"");
+    }
+
+    #[test]
+    fn test_params_serialization() {
+        let params = gen_test_params();
+        let mut buf = vec![];
+        params.encode(&mut buf);
+        let params_deserialized = Params::decode(&buf).unwrap();
+
+        assert_eq!(params_deserialized.n_buckets, DEFAULT_N_BUCKETS);
+        assert_eq!(params_deserialized.big_g, generator_g());
+        assert_eq!(params_deserialized.big_h, generator_h(&params.context_string()));
+        assert_eq!(params_deserialized.deployment_id, b"");
+    }
+
+    #[test]
+    fn test_params_deserialization_fails_when_no_deployment_id() {
+        let params = gen_test_params();
+        let mut buf = vec![];
+        params.encode(&mut buf);
+        let result = Params::decode(&buf[..buf.len() - 1]);
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), INPUT_TOO_SHORT);
+    }
+
+    #[test]
+    fn test_params_deserialization_fails_when_deployment_id_too_short() {
+        let mut params = gen_test_params();
+        params.deployment_id = b"a".to_vec();
+        let mut buf = vec![];
+        params.encode(&mut buf);
+        let result = Params::decode(&buf[..buf.len() - 1]);
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), INPUT_TOO_SHORT);
+    }
+
+    #[test]
     fn test_key_gen() {
-        let params = test_params();
+        let params = gen_test_params();
         let mut rng = rand::thread_rng();
         let (private_key, public_key, _proof) = key_gen(&params, &mut rng);
 
@@ -1156,7 +1218,7 @@ mod tests {
     #[test]
     fn test_generators() {
         let g = generator_g();
-        let h = generator_h();
+        let h = generator_h(b"test");
 
         // Verify generators are distinct
         assert!(g != h);
@@ -1168,7 +1230,7 @@ mod tests {
 
     #[test]
     fn test_verify_public_key_proof() {
-        let params = test_params();
+        let params = gen_test_params();
         let mut rng = rand::thread_rng();
         let (_, public_key, proof) = key_gen(&params, &mut rng);
 
@@ -1189,7 +1251,7 @@ mod tests {
     #[test]
     fn test_token_request() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (_, public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a token request
@@ -1215,7 +1277,7 @@ mod tests {
     #[test]
     fn test_token_response() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a token request from client
@@ -1269,7 +1331,7 @@ mod tests {
     #[test]
     fn test_verify_issuance_proof() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a token request from client
@@ -1317,7 +1379,7 @@ mod tests {
     #[test]
     fn test_end_to_end_protocol() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
 
         // Server generates keys
         let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
@@ -1377,7 +1439,7 @@ mod tests {
     #[test]
     fn test_verify_token_edge_cases() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a valid token
@@ -1416,7 +1478,7 @@ mod tests {
     #[test]
     fn test_tampered_tokens() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Create a valid token
@@ -1506,7 +1568,7 @@ mod tests {
     #[test]
     fn test_tokens_from_different_sessions() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (server_private_key, server_public_key, proof) = key_gen(&params, &mut rng);
 
         // Session 1: Create first token
@@ -1580,7 +1642,7 @@ mod tests {
     #[test]
     fn test_forged_tokens() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let (server_private_key, server_public_key, _proof) = key_gen(&params, &mut rng);
 
         // Attempt 1: Completely random token
@@ -1720,7 +1782,7 @@ mod tests {
     #[test]
     fn test_end_to_end_protocol_serialized() {
         let mut rng = rand::thread_rng();
-        let params = test_params();
+        let params = gen_test_params();
         let mut params_bytes = vec![];
         params.encode(&mut params_bytes);
 
