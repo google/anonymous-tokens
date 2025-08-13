@@ -101,9 +101,9 @@ impl Transcript {
 
     /// Add a point to the transcript
     fn append_point(&mut self, point: &ProjectivePoint) {
-        let encoded = point.to_affine().to_encoded_point(false);
+        let encoded = point.to_bytes();
         self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
-        self.messages.push(encoded.to_bytes().to_vec());
+        self.messages.push(encoded.to_vec());
     }
 
     /// Generate a challenge scalar with domain separation
@@ -640,7 +640,8 @@ impl Params {
     }
 
     pub fn context_string(&self) -> Vec<u8> {
-        Self::build_context_string(self.n_buckets, &self.deployment_id)
+        let str = Self::build_context_string(self.n_buckets, &self.deployment_id);
+        str
     }
 
     fn build_context_string(n_buckets: u8, deployment_id: &[u8]) -> Vec<u8> {
@@ -698,13 +699,11 @@ fn generator_g() -> ProjectivePoint {
 
 /// Get the generator H by hashing generator G
 fn generator_h(context_string: &[u8]) -> ProjectivePoint {
-    let g = generator_g();
-    let g_bytes = g.to_affine().to_encoded_point(false);
-    let g_bytes = g_bytes.as_bytes();
+    let g_bytes = generator_g().to_bytes();
 
     // Use hash-to-curve to derive H from G
-    let msg_array: &[&[u8]] = &[g_bytes];
-    let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"generator_H"];
+    let msg_array: &[&[u8]] = &[&g_bytes];
+    let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"generatorH"];
     // Safety (see docs for ExpandMsgXmd)
     // - destination is not empty
     // - input is not empty and is less than or equal to u16::MAX bytes
