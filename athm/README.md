@@ -33,25 +33,29 @@ athm = "0.1.0"
 
 ```rust
 use athm::*;
-use rand_core::OsRng;
 
 // Setup with 4 metadata buckets (e.g., risk levels 0-3)
-let params = Params::new(4).unwrap();
-let (private_key, public_key, proof) = key_gen(&params);
+let params = Params::new(4, b"deployment_id".to_vec()).unwrap();
+let mut rng = rand::thread_rng();
+let (private_key, public_key, proof) = key_gen(&params, &mut rng);
 
 // Client creates blinded request
-let mut rng = OsRng;
 let (context, request) = token_request(&public_key, &proof, &params, &mut rng).unwrap();
 
-// Server embeds metadata (e.g., risk level 2) and responds
-let response = token_response(&private_key, &public_key, &request, 2, &params, &mut rng).unwrap();
+// Server responds with hidden metadata
+let hidden_metadata = 2;
+let response = token_response(
+    &private_key, &public_key, &request, hidden_metadata, &params, &mut rng
+).unwrap();
 
 // Client unblinds token
-let token = finalize_token(&context, &public_key, &request, &response, &params, &mut rng).unwrap();
+let token = finalize_token(
+    &context, &public_key, &request, &response, &params, &mut rng
+).unwrap();
 
 // Server verifies and recovers metadata
 let metadata = verify_token(&private_key, &token, &params).unwrap();
-assert_eq!(metadata, 2);
+assert_eq!(metadata, hidden_metadata);
 ```
 
 ## Technical Details
@@ -61,5 +65,3 @@ assert_eq!(metadata, 2);
 
 ## Disclaimers
 This is not an officially supported Google product. The software is provided as-is without any guarantees or warranties, express or implied.
-
-
