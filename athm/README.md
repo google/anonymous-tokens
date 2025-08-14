@@ -4,7 +4,9 @@ Privacy-preserving tokens where servers embed metadata invisible to clients.
 
 ## Overview
 
-ATHM lets servers embed categorical data (like risk scores or user tiers) in tokens without clients knowing. Useful for anonymous authentication with hidden authorization levels.
+ATHM lets servers embed categorical data (like risk scores or user tiers) in
+tokens without clients knowing. Useful for anonymous authentication with hidden
+authorization levels.
 
 ## Features
 
@@ -64,4 +66,5 @@ assert_eq!(metadata, hidden_metadata);
 - Based on the ATHM specification
 
 ## Disclaimers
-This is not an officially supported Google product. The software is provided as-is without any guarantees or warranties, express or implied.
+This is not an officially supported Google product. The software is provided
+as-is without any guarantees or warranties, express or implied.

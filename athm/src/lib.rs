@@ -64,7 +64,7 @@ use elliptic_curve::hash2curve::{ExpandMsgXmd, GroupDigest};
 use p256::{
     elliptic_curve::{
         group::GroupEncoding,
-        sec1::{ModulusSize, ToEncodedPoint},
+        sec1::ModulusSize,
         subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption},
         Field, FieldBytes, FieldBytesSize, Group, PrimeField,
     },
