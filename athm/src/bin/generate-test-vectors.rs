@@ -127,11 +127,7 @@ fn main() {
     let hidden_metadata = athm::verify_token(&private_key, &token, &params).into_option().unwrap();
     test_vectors.push(TestVector {
         procedure: "verify_token",
-        args: BTreeMap::from([
-            ("rng_seed", rng_seed.to_string()),
-            ("private_key", private_key.to_hex()),
-            ("token", token.to_hex()),
-        ]),
+        args: BTreeMap::from([("private_key", private_key.to_hex()), ("token", token.to_hex())]),
         output: BTreeMap::from([("hidden_metadata", hidden_metadata.to_string())]),
     });
 

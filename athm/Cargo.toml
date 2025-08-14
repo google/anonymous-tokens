@@ -34,3 +34,7 @@ harness = false
 [[bin]]
 name = "generate-test-vectors"
 required-features = ["test-vectors"]
+
+[[bin]]
+name = "check-test-vectors"
+required-features = ["test-vectors"]
