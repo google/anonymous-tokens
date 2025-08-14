@@ -21,3 +21,5 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Check test vectors
+      run: cargo run --features=test-vectors --bin check-test-vectors test_vectors.json
