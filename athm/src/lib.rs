@@ -703,7 +703,7 @@ fn generator_h(context_string: &[u8]) -> ProjectivePoint {
 
     // Use hash-to-curve to derive H from G
     let msg_array: &[&[u8]] = &[&g_bytes];
-    let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"generatorH"];
+    let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"-generatorH"];
     // Safety (see docs for ExpandMsgXmd)
     // - destination is not empty
     // - input is not empty and is less than or equal to u16::MAX bytes
