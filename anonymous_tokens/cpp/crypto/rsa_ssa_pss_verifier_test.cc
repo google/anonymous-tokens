@@ -161,8 +161,11 @@ TEST(RsaSsaPssVerifierTestWithPublicMetadata,
   }
 }
 
+using CreateTestKeyPairFunction =
+    absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>();
+
 using RsaSsaPssVerifierPublicMetadataTestParams =
-    std::tuple<absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>,
+    std::tuple<CreateTestKeyPairFunction *,
                /*use_rsa_public_exponent*/ bool>;
 
 class RsaSsaPssVerifierTestWithPublicMetadata
@@ -170,7 +173,7 @@ class RsaSsaPssVerifierTestWithPublicMetadata
           RsaSsaPssVerifierPublicMetadataTestParams> {
  protected:
   void SetUp() override {
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, std::get<0>(GetParam()));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, std::get<0>(GetParam())());
     use_rsa_public_exponent_ = std::get<1>(GetParam());
     public_key_ = std::move(keys_pair.first);
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
@@ -317,8 +320,8 @@ INSTANTIATE_TEST_SUITE_P(
     RsaSsaPssVerifierTestWithPublicMetadata,
     RsaSsaPssVerifierTestWithPublicMetadata,
     ::testing::Combine(
-        ::testing::Values(GetStrongRsaKeys2048(), GetAnotherStrongRsaKeys2048(),
-                          GetStrongRsaKeys3072(), GetStrongRsaKeys4096()),
+        ::testing::Values(&GetStrongRsaKeys2048, &GetAnotherStrongRsaKeys2048,
+                          &GetStrongRsaKeys3072, &GetStrongRsaKeys4096),
         /*use_rsa_public_exponent*/ ::testing::Values(true, false)));
 
 }  // namespace
