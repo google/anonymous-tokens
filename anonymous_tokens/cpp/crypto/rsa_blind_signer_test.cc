@@ -119,9 +119,6 @@ INSTANTIATE_TEST_SUITE_P(RsaBlindSignerTest, RsaBlindSignerTest,
                                            &GetStrongRsaKeys3072,
                                            &GetStrongRsaKeys4096));
 
-using CreateTestKeyPairFunction =
-    absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>();
-
 using RsaBlindSignerPublicMetadataTestParams =
     std::tuple<CreateTestKeyPairFunction *,
                /*use_rsa_public_exponent*/ bool>;
