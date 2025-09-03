@@ -120,14 +120,14 @@ INSTANTIATE_TEST_SUITE_P(RsaBlindSignerTest, RsaBlindSignerTest,
                                            &GetStrongRsaKeys4096));
 
 using RsaBlindSignerPublicMetadataTestParams =
-    std::tuple<absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>,
+    std::tuple<CreateTestKeyPairFunction *,
                /*use_rsa_public_exponent*/ bool>;
 
 class RsaBlindSignerTestWithPublicMetadata
     : public ::testing::TestWithParam<RsaBlindSignerPublicMetadataTestParams> {
  protected:
   void SetUp() override {
-    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, std::get<0>(GetParam()));
+    ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, std::get<0>(GetParam())());
     use_rsa_public_exponent_ = std::get<1>(GetParam());
     public_key_ = std::move(keys_pair.first);
     private_key_ = std::move(keys_pair.second);
@@ -253,8 +253,8 @@ TEST_P(RsaBlindSignerTestWithPublicMetadata,
 INSTANTIATE_TEST_SUITE_P(
     RsaBlindSignerTestWithPublicMetadata, RsaBlindSignerTestWithPublicMetadata,
     ::testing::Combine(
-        ::testing::Values(GetStrongRsaKeys2048(), GetAnotherStrongRsaKeys2048(),
-                          GetStrongRsaKeys3072(), GetStrongRsaKeys4096()),
+        ::testing::Values(&GetStrongRsaKeys2048, &GetAnotherStrongRsaKeys2048,
+                          &GetStrongRsaKeys3072, &GetStrongRsaKeys4096),
         /*use_rsa_public_exponent*/ ::testing::Values(true, false)));
 
 TEST(IetfRsaBlindSignerTest,
