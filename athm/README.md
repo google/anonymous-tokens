@@ -60,6 +60,14 @@ let metadata = verify_token(&private_key, &token, &params).unwrap();
 assert_eq!(metadata, hidden_metadata);
 ```
 
+## Test vectors
+
+To update the test vectors, run:
+`cargo run --bin generate-test-vectors --features="test-vectors" > test_vectors.json`
+
+To check the test vectors, run:
+`cargo run --bin check-test-vectors --features="test-vectors"`
+
 ## Technical Details
 
 - Uses P-256 elliptic curves and constant-time operations
