@@ -48,7 +48,9 @@ fn main() {
     let rng_seed = "0101010101010101010101010101010101010101010101010101010101010101";
     let mut rng = ChaCha20Rng::from_seed(hex::decode(rng_seed).unwrap().try_into().unwrap());
     let (private_key, public_key, public_key_proof) = athm::key_gen(&params, &mut rng);
-    let key_id = Sha256::digest(public_key.to_hex() + &public_key_proof.to_hex());
+    let mut public_key_bytes = vec![];
+    public_key.encode(&mut public_key_bytes);
+    let key_id = Sha256::digest(&public_key_bytes);
     test_vectors.push(TestVector {
         procedure: "key_gen",
         args: BTreeMap::from([("rng_seed", rng_seed.to_string())]),

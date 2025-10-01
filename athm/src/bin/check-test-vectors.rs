@@ -1,6 +1,6 @@
 use athm::{
-    Decodable, Params, PrivateKey, PublicKey, PublicKeyProof, Token, TokenContext, TokenRequest,
-    TokenResponse,
+    Decodable, Encodable, Params, PrivateKey, PublicKey, PublicKeyProof, Token, TokenContext,
+    TokenRequest, TokenResponse,
 };
 use p256::ProjectivePoint;
 use serde::Deserialize;
@@ -59,13 +59,15 @@ fn main() {
                 // Already checked above.
             }
             "key_gen" => {
-                let public_key_hex = test_vector.output.get("public_key").unwrap();
-                let public_key = PublicKey::from_hex(public_key_hex).unwrap();
-                let public_key_proof_hex = test_vector.output.get("public_key_proof").unwrap();
-                let public_key_proof = PublicKeyProof::from_hex(public_key_proof_hex).unwrap();
+                let public_key =
+                    PublicKey::from_hex(test_vector.output.get("public_key").unwrap()).unwrap();
+                let public_key_proof =
+                    PublicKeyProof::from_hex(test_vector.output.get("public_key_proof").unwrap())
+                        .unwrap();
                 assert!(athm::verify_public_key_proof(&public_key, &public_key_proof, &params));
-                let expected_key_id =
-                    hex::encode(Sha256::digest(public_key_hex.clone() + &public_key_proof_hex));
+                let mut public_key_bytes = vec![];
+                public_key.encode(&mut public_key_bytes);
+                let expected_key_id = hex::encode(Sha256::digest(&public_key_bytes));
                 let key_id = test_vector.output.get("key_id").unwrap();
                 assert_eq!(key_id, &expected_key_id);
                 println!("{}: OK", procedure);
