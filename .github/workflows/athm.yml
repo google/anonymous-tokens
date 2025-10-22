@@ -18,7 +18,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --all-targets --all-features
     - name: Run tests
       run: cargo test --verbose
     - name: Check test vectors
