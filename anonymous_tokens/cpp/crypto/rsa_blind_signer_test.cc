@@ -17,6 +17,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include <gmock/gmock.h>
@@ -40,7 +41,7 @@ using CreateTestKeyPairFunction =
     absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>();
 
 class RsaBlindSignerTest
-    : public ::testing::TestWithParam<CreateTestKeyPairFunction *> {
+    : public ::testing::TestWithParam<CreateTestKeyPairFunction*> {
  protected:
   void SetUp() override {
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto keys_pair, (*GetParam())());
@@ -56,8 +57,8 @@ class RsaBlindSignerTest
   RSAPrivateKey private_key_;
   RSAPublicKey public_key_;
   std::mt19937_64 generator_;
-  const EVP_MD *sig_hash_;   // Owned by BoringSSL.
-  const EVP_MD *mgf1_hash_;  // Owned by BoringSSL.
+  const EVP_MD* sig_hash_;   // Owned by BoringSSL.
+  const EVP_MD* mgf1_hash_;  // Owned by BoringSSL.
   int salt_length_;
   std::uniform_int_distribution<int> distr_u8_ =
       std::uniform_int_distribution<int>{0, 255};
@@ -95,7 +96,7 @@ TEST_P(RsaBlindSignerTest, SignerFails) {
   absl::string_view message = "Hello World!";
 
   absl::StatusOr<std::string> signature = signer->Sign(message);
-  EXPECT_EQ(signature.status().code(), absl::StatusCode::kInternal);
+  EXPECT_EQ(signature.status().code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(signature.status().message(),
               ::testing::HasSubstr("Expected blind data size"));
 
@@ -120,7 +121,7 @@ INSTANTIATE_TEST_SUITE_P(RsaBlindSignerTest, RsaBlindSignerTest,
                                            &GetStrongRsaKeys4096));
 
 using RsaBlindSignerPublicMetadataTestParams =
-    std::tuple<CreateTestKeyPairFunction *,
+    std::tuple<CreateTestKeyPairFunction*,
                /*use_rsa_public_exponent*/ bool>;
 
 class RsaBlindSignerTestWithPublicMetadata
@@ -139,8 +140,8 @@ class RsaBlindSignerTestWithPublicMetadata
 
   RSAPrivateKey private_key_;
   RSAPublicKey public_key_;
-  const EVP_MD *sig_hash_;   // Owned by BoringSSL.
-  const EVP_MD *mgf1_hash_;  // Owned by BoringSSL.
+  const EVP_MD* sig_hash_;   // Owned by BoringSSL.
+  const EVP_MD* mgf1_hash_;  // Owned by BoringSSL.
   int salt_length_;
   bool use_rsa_public_exponent_;
 };
@@ -263,7 +264,7 @@ TEST(IetfRsaBlindSignerTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto test_key,
       GetIetfRsaBlindSignatureWithPublicMetadataTestKeys());
-  for (const auto &test_vector : test_vectors) {
+  for (const auto& test_vector : test_vectors) {
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
         std::unique_ptr<RsaBlindSigner> signer,
         RsaBlindSigner::New(test_key.second, /*use_rsa_public_exponent=*/true,
@@ -281,7 +282,7 @@ TEST(IetfRsaBlindSignerTest,
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto test_key,
       GetIetfRsaBlindSignatureWithPublicMetadataTestKeys());
-  for (const auto &test_vector : test_vectors) {
+  for (const auto& test_vector : test_vectors) {
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
         std::unique_ptr<RsaBlindSigner> signer,
         RsaBlindSigner::New(test_key.second, /*use_rsa_public_exponent=*/false,

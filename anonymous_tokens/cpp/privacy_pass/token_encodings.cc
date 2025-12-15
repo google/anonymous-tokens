@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -27,6 +28,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
@@ -127,13 +129,12 @@ absl::StatusOr<Token> UnmarshalToken(std::string token) {
   out.nonce.resize(32);
   out.context.resize(32);
   out.token_key_id.resize(32);
-  out.authenticator.resize(256);
   CBS cbs;
   CBS_init(&cbs, reinterpret_cast<const uint8_t*>(token.data()), token.size());
   if (!CBS_get_u16(&cbs, &out.token_type)) {
     return absl::InvalidArgumentError("failed to read token type");
   }
-  if (out.token_type != 0xDA7A) {
+  if (out.token_type != 0xDA7A && out.token_type != 0x0002) {
     return absl::InvalidArgumentError("unsupported token type");
   }
   if (!CBS_copy_bytes(&cbs, reinterpret_cast<uint8_t*>(out.nonce.data()),
@@ -148,13 +149,19 @@ absl::StatusOr<Token> UnmarshalToken(std::string token) {
                       out.token_key_id.size())) {
     return absl::InvalidArgumentError("failed to read token_key_id");
   }
+  // Determine authenticator size from the remaining bytes.
+  size_t authenticator_size = CBS_len(&cbs);
+  if (authenticator_size != kBlindedTokenSizeInBytes256 &&
+      authenticator_size != kBlindedTokenSizeInBytes512) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("invalid authenticator size: expected 256 or 512, got %d",
+                     authenticator_size));
+  }
+  out.authenticator.resize(authenticator_size);
   if (!CBS_copy_bytes(&cbs,
                       reinterpret_cast<uint8_t*>(out.authenticator.data()),
                       out.authenticator.size())) {
     return absl::InvalidArgumentError("failed to read authenticator");
-  }
-  if (CBS_len(&cbs) != 0) {
-    return absl::InvalidArgumentError("token had extra bytes");
   }
   return out;
 }
@@ -325,20 +332,20 @@ absl::StatusOr<GeoHint> GeoHint::FromExtension(const Extension& ext) {
     return absl::InvalidArgumentError("[GeoHint] failed to read geohint data");
   }
 
-  const std::vector<std::string_view> split = absl::StrSplit(gh.geo_hint, ',');
+  const std::vector<absl::string_view> split = absl::StrSplit(gh.geo_hint, ',');
   if (split.size() != 3) {
     return absl::InvalidArgumentError(
         "[GeoHint] geo_hint must be exactly 3 parts.");
   }
-  for (const std::string_view part : split) {
+  for (const absl::string_view part : split) {
     if (absl::AsciiStrToUpper(part) != part) {
       return absl::InvalidArgumentError(
           "[GeoHint] all geo_hint parts must be UPPERCASE.");
     }
   }
-  gh.country_code = split[0];
-  gh.region = split[1];
-  gh.city = split[2];
+  gh.country_code = std::string(split[0]);
+  gh.region = std::string(split[1]);
+  gh.city = std::string(split[2]);
   return gh;
 }
 
@@ -384,6 +391,9 @@ absl::StatusOr<ServiceType> ServiceType::FromExtension(const Extension& ext) {
       break;
     case kWebviewIpBlinding:
       st.service_type = "webviewipblinding";
+      break;
+    case kPrivateAratea:
+      st.service_type = "privatearatea";
       break;
     default:
       return absl::InvalidArgumentError(
@@ -465,7 +475,8 @@ absl::StatusOr<ProxyLayer> ProxyLayer::FromExtension(const Extension& ext) {
     return absl::InvalidArgumentError(
         "[ProxyLayer] failed to read len from extension");
   }
-  if (pl.layer != kProxyA && pl.layer != kProxyB) {
+  if (pl.layer != kProxyA && pl.layer != kProxyB &&
+      pl.layer != kTerminalLayer) {
     return absl::InvalidArgumentError(
         absl::StrCat("[ProxyLayer] invalid layer: ", pl.layer));
   }
@@ -538,7 +549,9 @@ absl::StatusOr<std::string> MarshalTokenRequest(
   bssl::ScopedCBB cbb;
   // initial_capacity only serves as a hint.
   if (!CBB_init(cbb.get(),
-                /*initial_capacity=*/kDA7AMarshaledTokenRequestSizeInBytes)) {
+                /*initial_capacity=*/kBlindedTokenSizeInBytes256 +
+                    kSizeofTokenTypeInBytes2 +
+                    kSizeofTruncatedTokenKeyIdInBytes1)) {
     return absl::InternalError("CBB_init() failed.");
   }
   // Add token_type to cbb.
@@ -570,14 +583,18 @@ absl::StatusOr<std::string> MarshalTokenRequest(
 absl::StatusOr<TokenRequest> UnmarshalTokenRequest(
     absl::string_view token_request) {
   TokenRequest out;
-  out.blinded_token_request.resize(kDA7ABlindedTokenRequestSizeInBytes);
+  if (token_request.size() >= kBlindedTokenSizeInBytes512) {
+    out.blinded_token_request.resize(kBlindedTokenSizeInBytes512);
+  } else {
+    out.blinded_token_request.resize(kBlindedTokenSizeInBytes256);
+  }
   CBS cbs;
   CBS_init(&cbs, reinterpret_cast<const uint8_t*>(token_request.data()),
            token_request.size());
   if (!CBS_get_u16(&cbs, &out.token_type)) {
     return absl::InvalidArgumentError("failed to read token type");
   }
-  if (out.token_type != 0xDA7A) {
+  if (out.token_type != 0xDA7A && out.token_type != 0x0002) {
     return absl::InvalidArgumentError("unsupported token type");
   }
   if (!CBS_get_u8(&cbs, &out.truncated_token_key_id)) {
@@ -600,11 +617,14 @@ absl::StatusOr<std::string> MarshalExtendedTokenRequest(
   // finalize the output string.
   bssl::ScopedCBB cbb;
   // Initial_capacity only serves as a hint. Note that
-  // extended_token_request.request would occupy 259 bytes as the token type is
-  // DA7A and we will add some additional bytes as  buffer for the extensions.
-  if (!CBB_init(
-          cbb.get(),
-          /*initial_capacity=*/kDA7AMarshaledTokenRequestSizeInBytes + 41)) {
+  // extended_token_request.request would occupy at least 259 bytes as the token
+  // type is DA7A and we will add some additional bytes as buffer for the
+  // extensions.
+  if (!CBB_init(cbb.get(),
+                /*initial_capacity=*/kBlindedTokenSizeInBytes256 +
+                    kSizeofTokenTypeInBytes2 +
+                    kSizeofTruncatedTokenKeyIdInBytes1 +
+                    kSizeofBufferForEncodedExtensionsInBytes)) {
     return absl::InternalError("CBB_init() failed.");
   }
   // Marshal TokenRequest structure.
@@ -643,14 +663,21 @@ absl::StatusOr<std::string> MarshalExtendedTokenRequest(
 }
 
 absl::StatusOr<ExtendedTokenRequest> UnmarshalExtendedTokenRequest(
-    absl::string_view extended_token_request) {
+    absl::string_view extended_token_request, const int blinded_token_size) {
+  if (blinded_token_size != kBlindedTokenSizeInBytes256 &&
+      blinded_token_size != kBlindedTokenSizeInBytes512) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "invalid parameter blinded_token_size : expected 256 or 512, got %d",
+        blinded_token_size));
+  }
   CBS cbs;
   CBS_init(&cbs,
            reinterpret_cast<const uint8_t*>(extended_token_request.data()),
            extended_token_request.size());
 
   std::string encoded_token_request;
-  encoded_token_request.resize(kDA7AMarshaledTokenRequestSizeInBytes);
+  encoded_token_request.resize(blinded_token_size + kSizeofTokenTypeInBytes2 +
+                               kSizeofTruncatedTokenKeyIdInBytes1);
   if (!CBS_copy_bytes(&cbs,
                       reinterpret_cast<uint8_t*>(encoded_token_request.data()),
                       encoded_token_request.size())) {

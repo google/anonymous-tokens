@@ -20,9 +20,8 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
 #include "anonymous_tokens/cpp/crypto/rsa_blinder.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 
@@ -38,10 +37,12 @@ namespace anonymous_tokens {
 // This class is not thread-safe.
 class AnonymousTokensRsaBssaClient {
  public:
+  #ifndef SWIG
   // AnonymousTokensRsaBssaClient is neither copyable nor copy assignable.
   AnonymousTokensRsaBssaClient(const AnonymousTokensRsaBssaClient&) = delete;
   AnonymousTokensRsaBssaClient& operator=(const AnonymousTokensRsaBssaClient&) =
       delete;
+  #endif
 
   // Create client with the specified public key which can be used to send a
   // sign request and process a response.
@@ -49,7 +50,8 @@ class AnonymousTokensRsaBssaClient {
   // This method is to be used to create a client as its constructor is private.
   // It takes as input RSABlindSignaturePublicKey which contains the public key
   // and relevant parameters.
-  static absl::StatusOr<std::unique_ptr<AnonymousTokensRsaBssaClient>> Create(
+  static absl::StatusOr<
+      std::unique_ptr<AnonymousTokensRsaBssaClient> > Create(
       const RSABlindSignaturePublicKey& public_key);
 
   // Class method that creates the signature requests by taking a vector where
@@ -68,13 +70,14 @@ class AnonymousTokensRsaBssaClient {
   // plaintext message and associated public metadata (if it exists) along with
   // its final (unblinded) anonymous token resulting from the RSA blind
   // signatures protocol.
-  absl::StatusOr<std::vector<RSABlindSignatureTokenWithInput>> ProcessResponse(
+  absl::StatusOr<
+      std::vector<RSABlindSignatureTokenWithInput> > ProcessResponse(
       const AnonymousTokensSignResponse& response);
 
   // Method to verify whether an anonymous token is valid or not.
   //
   // Returns OK on a valid token and non-OK otherwise.
-  absl::Status Verify(const RSABlindSignaturePublicKey& public_key,
+  static absl::Status Verify(const RSABlindSignaturePublicKey& public_key,
                       const RSABlindSignatureToken& token,
                       const PlaintextMessageWithPublicMetadata& input);
 

@@ -87,7 +87,8 @@ absl::Status RunDemo() {
   absl::StatusOr<anonymous_tokens::ExtendedTokenRequest>
       extended_token_request =
           anonymous_tokens::UnmarshalExtendedTokenRequest(
-              extended_token_request_str);
+              extended_token_request_str, anonymous_tokens::
+                                              kBlindedTokenSizeInBytes256);
   if (!extended_token_request.ok()) {
     return extended_token_request.status();
   }

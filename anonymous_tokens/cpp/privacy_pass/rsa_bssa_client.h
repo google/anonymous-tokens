@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_RSA_BSSA_PUBLIC_METADATA_CLIENT_H_
-#define ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_RSA_BSSA_PUBLIC_METADATA_CLIENT_H_
+#ifndef ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_RSA_BSSA_CLIENT_H_
+#define ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_RSA_BSSA_CLIENT_H_
 
 #include <memory>
 #include <string>
@@ -27,43 +27,34 @@
 
 namespace anonymous_tokens {
 
-// PrivacyPassRsaBssaPublicMetadataClient is a client class for token type
-// 0xDA7A. This token type supports rsa modulus size of 2048 bits. The only
-// difference from the specification is that this client class additionally
-// supports rsa modulus size of 4096 bits.
-class PrivacyPassRsaBssaPublicMetadataClient {
+class PrivacyPassRsaBssaClient {
  public:
-  #ifndef SWIG
-  // PrivacyPassRsaBssaPublicMetadataClient is neither copyable nor copy
-  // assignable.
-  PrivacyPassRsaBssaPublicMetadataClient(
-      const PrivacyPassRsaBssaPublicMetadataClient&) = delete;
-  PrivacyPassRsaBssaPublicMetadataClient& operator=(
-      const PrivacyPassRsaBssaPublicMetadataClient&) = delete;
-  #endif
+#ifndef SWIG
+  // PrivacyPassRsaBssaClient is neither copyable nor copy assignable.
+  PrivacyPassRsaBssaClient(const PrivacyPassRsaBssaClient&) = delete;
+  PrivacyPassRsaBssaClient& operator=(const PrivacyPassRsaBssaClient&) = delete;
+#endif
   // This method is to be used to create a client as its constructor is private.
   // It takes as input RSA public key.
-  static absl::StatusOr<
-      std::unique_ptr<PrivacyPassRsaBssaPublicMetadataClient> >
-  Create(const RSA& rsa_public_key);
+  static absl::StatusOr<std::unique_ptr<PrivacyPassRsaBssaClient> > Create(
+      const RSA& rsa_public_key);
 
-  // Method used to create the ExtendedTokenRequest. It takes in the input
-  // "challenge" as an encoded string, "nonce" must a 32 byte random string,
+  // Method used to create the TokenRequest. It takes in the input
+  // "challenge" as an encoded string, "nonce" must a 32 byte random string and
   // "token_key_id" is the SHA256 digest of the DER encoding of RSA BSSA public
-  // key containing the correct hash functions and salt size and "extensions" is
-  // the structure carrying the public metadata / info.
+  // key containing the correct hash functions and salt size.
   //
-  // https://www.ietf.org/archive/id/draft-hendrickson-privacypass-public-metadata-01.html#name-client-to-issuer-request-2
+  // https://datatracker.ietf.org/doc/html/draft-ietf-privacypass-protocol-10#name-client-to-issuer-request-4
   //
   // CreateTokenRequest must be called before FinalizeToken.
-  absl::StatusOr<ExtendedTokenRequest> CreateTokenRequest(
+  absl::StatusOr<TokenRequest> CreateTokenRequest(
       absl::string_view challenge, absl::string_view nonce,
-      absl::string_view token_key_id, const Extensions& extensions);
+      absl::string_view token_key_id);
 
   // Method that uses the client state and outputs the final token by unblinding
   // the "blinded_signature".
   //
-  // https://www.ietf.org/archive/id/draft-hendrickson-privacypass-public-metadata-01.html#name-finalization-2
+  // https://datatracker.ietf.org/doc/html/draft-ietf-privacypass-protocol-10#name-finalization-4
   //
   // CreateTokenRequest must be called before FinalizeToken.
   absl::StatusOr<Token> FinalizeToken(absl::string_view blinded_signature);
@@ -72,19 +63,16 @@ class PrivacyPassRsaBssaPublicMetadataClient {
   // public key to run the token verification algorithm. It returns an ok status
   // on success and errs on verification failure.
   //
-  // https://datatracker.ietf.org/doc/draft-hendrickson-privacypass-public-metadata/
-  static absl::Status Verify(Token token_to_verify,
-                             absl::string_view encoded_extensions,
-                             RSA& rsa_public_key);
+  // https://datatracker.ietf.org/doc/html/draft-ietf-privacypass-protocol-10#name-token-verification-4
+  static absl::Status Verify(Token token_to_verify, RSA& rsa_public_key);
 
-  static constexpr uint16_t kTokenType = 0xDA7A;
+  static constexpr uint16_t kTokenType = 0x0002;
 
  private:
-  PrivacyPassRsaBssaPublicMetadataClient(int salt_length,
-                                         std::string rsa_modulus,
-                                         std::string rsa_e,
-                                         const EVP_MD* signature_hash_function,
-                                         const EVP_MD* mgf1_hash_function);
+  PrivacyPassRsaBssaClient(int salt_length, std::string rsa_modulus,
+                           std::string rsa_e,
+                           const EVP_MD* signature_hash_function,
+                           const EVP_MD* mgf1_hash_function);
 
   const int salt_length_;
   const std::string rsa_modulus_;
@@ -106,4 +94,4 @@ class PrivacyPassRsaBssaPublicMetadataClient {
 
 }  // namespace anonymous_tokens
 
-#endif  // ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_RSA_BSSA_PUBLIC_METADATA_CLIENT_H_
+#endif  // ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_RSA_BSSA_CLIENT_H_
