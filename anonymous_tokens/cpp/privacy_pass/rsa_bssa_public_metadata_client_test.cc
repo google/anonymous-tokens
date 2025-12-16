@@ -29,7 +29,7 @@
 namespace anonymous_tokens {
 namespace {
 
-class PrivacyPassRsaBssaClientTest : public testing::Test {
+class PrivacyPassRsaBssaPublicMetadataClientTest : public testing::Test {
  protected:
   void SetUp() override {
     // Seed the random string generator.
@@ -99,7 +99,7 @@ class PrivacyPassRsaBssaClientTest : public testing::Test {
       std::uniform_int_distribution<int>{0, 255};
 };
 
-TEST_F(PrivacyPassRsaBssaClientTest, WrongKeySize) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, WrongKeySize) {
   auto [test_rsa_public_key, _] = GetStrongTestRsaKeyPair3072();
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<RSA> wrong_rsa_public_key,
@@ -114,10 +114,10 @@ TEST_F(PrivacyPassRsaBssaClientTest, WrongKeySize) {
   EXPECT_EQ(client.status().code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(client.status().message(),
               ::testing::HasSubstr("Token type DA7A must use RSA key with the "
-                                   "modulus of size 256 bytes"));
+                                   "modulus of size 256 or 512 bytes"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, WrongSizeOfTokenKeyID) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, WrongSizeOfTokenKeyID) {
   // Token key ID of invalid size 0.
   absl::StatusOr<ExtendedTokenRequest> token_req = client_->CreateTokenRequest(
       /*challenge=*/"", /*nonce=*/"", /*token_key_id=*/"", /*extensions=*/{});
@@ -128,7 +128,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, WrongSizeOfTokenKeyID) {
               ::testing::HasSubstr("token_key_id must be of size 32 bytes"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, CreateRequestTwice) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, CreateRequestTwice) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest _,
       client_->CreateTokenRequest(/*challenge=*/"", /*nonce=*/"", token_key_id_,
@@ -145,7 +145,8 @@ TEST_F(PrivacyPassRsaBssaClientTest, CreateRequestTwice) {
       ::testing::HasSubstr("CreateTokenRequest has already been called"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenWihtoutCreatingRequest) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
+       FinalizeTokenWihtoutCreatingRequest) {
   const std::string dummy_signature = GetRandomString(/*string_length=*/256);
   absl::StatusOr<Token> token = client_->FinalizeToken(dummy_signature);
 
@@ -156,7 +157,8 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenWihtoutCreatingRequest) {
                   "CreateRequest must be called before FinalizeToken"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenWithEmptySignature) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
+       FinalizeTokenWithEmptySignature) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -171,7 +173,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenWithEmptySignature) {
               ::testing::HasSubstr("Expected blind signature size = 256"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, FinalizeWrongToken) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, FinalizeWrongToken) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -187,7 +189,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeWrongToken) {
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest,
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
        FinalizeTokenWhereCreateRequestHasNoExtensions) {
   // Create token request without extensions.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
@@ -202,7 +204,7 @@ TEST_F(PrivacyPassRsaBssaClientTest,
       TestSignWithPublicMetadata(token_req.request.blinded_token_request,
                                  /*public_metadata=*/encoded_extensions,
                                  *rsa_private_key_.get(),
-                                 /*use_rsa_public_exponent=*/true));
+                                 /*use_rsa_public_exponent=*/false));
   // Finalize the token.
   absl::StatusOr<Token> token = client_->FinalizeToken(signature);
 
@@ -212,7 +214,8 @@ TEST_F(PrivacyPassRsaBssaClientTest,
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenCreatedWithEmptyExtensions) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
+       FinalizeTokenCreatedWithEmptyExtensions) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -224,7 +227,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenCreatedWithEmptyExtensions) {
       TestSignWithPublicMetadata(token_req.request.blinded_token_request,
                                  /*public_metadata=*/"",
                                  *rsa_private_key_.get(),
-                                 /*use_rsa_public_exponent=*/true));
+                                 /*use_rsa_public_exponent=*/false));
   // Finalize the token.
   absl::StatusOr<Token> token = client_->FinalizeToken(signature);
 
@@ -234,7 +237,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenCreatedWithEmptyExtensions) {
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenTwice) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, FinalizeTokenTwice) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -262,7 +265,8 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenTwice) {
                   "RsaBlinder is in wrong state to unblind signature"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenWithWrongClient) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
+       FinalizeTokenWithWrongClient) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req_1,
@@ -294,7 +298,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, FinalizeTokenWithWrongClient) {
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, VerifyWithWrongExtensions) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, VerifyWithWrongExtensions) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -326,7 +330,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, VerifyWithWrongExtensions) {
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, VerifyWithEmptyExtensions) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, VerifyWithEmptyExtensions) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -356,7 +360,7 @@ TEST_F(PrivacyPassRsaBssaClientTest, VerifyWithEmptyExtensions) {
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, VerifyWithWrongPublicKey) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest, VerifyWithWrongPublicKey) {
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,
@@ -388,7 +392,50 @@ TEST_F(PrivacyPassRsaBssaClientTest, VerifyWithWrongPublicKey) {
               ::testing::HasSubstr("PSS padding verification failed"));
 }
 
-TEST_F(PrivacyPassRsaBssaClientTest, TokenCreationAndVerificationSuccess) {
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
+       TokenCreationAndVerificationSuccess) {
+  // Create token request.
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      ExtendedTokenRequest token_req,
+      client_->CreateTokenRequest(challenge_encoding_, nonce_, token_key_id_,
+                                  extensions_));
+  // Compute correct token, given the ExtendedTokenRequest.
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const std::string encoded_extensions,
+                                   EncodeExtensions(token_req.extensions));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      const std::string signature,
+      TestSignWithPublicMetadata(token_req.request.blinded_token_request,
+                                 /*public_metadata=*/encoded_extensions,
+                                 *rsa_private_key_.get(),
+                                 /*use_rsa_public_exponent=*/false));
+  // Finalize the token.
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Token token,
+                                   client_->FinalizeToken(signature));
+  // Run public key verification successfully.
+  EXPECT_TRUE(PrivacyPassRsaBssaPublicMetadataClient::Verify(
+                  token, encoded_extensions, *rsa_public_key_.get())
+                  .ok());
+}
+
+TEST_F(PrivacyPassRsaBssaPublicMetadataClientTest,
+       TokenCreationAndVerificationSuccess512ByteKey) {
+  auto [test_rsa_public_key, test_rsa_private_key] =
+      GetStrongTestRsaKeyPair4096();
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      rsa_public_key_,
+      CreatePublicKeyRSA(test_rsa_public_key.n, test_rsa_public_key.e));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      rsa_private_key_,
+      CreatePrivateKeyRSA(test_rsa_private_key.n, test_rsa_private_key.e,
+                          test_rsa_private_key.d, test_rsa_private_key.p,
+                          test_rsa_private_key.q, test_rsa_private_key.dp,
+                          test_rsa_private_key.dq, test_rsa_private_key.crt));
+
+  // Pass in 512 byte key.
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      client_,
+      PrivacyPassRsaBssaPublicMetadataClient::Create(*rsa_public_key_.get()));
+
   // Create token request.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       ExtendedTokenRequest token_req,

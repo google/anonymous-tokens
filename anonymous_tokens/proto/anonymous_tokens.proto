@@ -26,7 +26,7 @@ message Timestamp {
 }
 
 // Different use cases for the Anonymous Tokens service.
-// Next ID: 15
+// Next ID: 19
 enum AnonymousTokensUseCase {
   // Test use cases here.
   ANONYMOUS_TOKENS_USE_CASE_UNDEFINED = 0;
@@ -36,6 +36,7 @@ enum AnonymousTokensUseCase {
   TEST_USE_CASE_4 = 5;
   TEST_USE_CASE_5 = 6;
   TEST_USE_CASE_6 = 9;
+  TEST_USE_CASE_7 = 16;
 
   PROVABLY_PRIVATE_NETWORK = 3;
   CHROME_IP_BLINDING = 7;
@@ -44,10 +45,14 @@ enum AnonymousTokensUseCase {
   ANDROID_IP_BLINDING = 11;
   NOCTOGRAM_LENS_PPISSUER = 12;
   PRIVATE_ARATEA = 14;
+  NOCTOGRAM_IRCS_PPISSUER = 15;
+  ATHM_IRCS_PPISSUER = 17;
+  CHROME_PRIVATE_ARATEA = 18;
   reserved 13;
 }
 
 // An enum describing different types of available hash functions.
+// Next ID: 4
 enum HashType {
   AT_HASH_TYPE_UNDEFINED = 0;
   AT_TEST_HASH_TYPE = 1;
@@ -58,6 +63,7 @@ enum HashType {
 
 // An enum describing different types of hash functions that can be used by the
 // mask generation function.
+// Next ID: 4
 enum MaskGenFunction {
   AT_MGF_UNDEFINED = 0;
   AT_TEST_MGF = 1;
@@ -67,6 +73,7 @@ enum MaskGenFunction {
 }
 
 // An enum describing different types of message masking.
+// Next ID: 4
 enum MessageMaskType {
   AT_MESSAGE_MASK_TYPE_UNDEFINED = 0;
   AT_MESSAGE_MASK_XOR = 1;
@@ -78,18 +85,25 @@ enum MessageMaskType {
 message RSAPrivateKey {
   // Modulus.
   bytes n = 1;
+
   // Public exponent.
   bytes e = 2;
+
   // Private exponent.
   bytes d = 3;
+
   // The prime factor p of n.
   bytes p = 4;
+
   // The prime factor q of n.
   bytes q = 5;
+
   // d mod (p - 1).
   bytes dp = 6;
+
   // d mod (q - 1).
   bytes dq = 7;
+
   // Chinese Remainder Theorem coefficient q^(-1) mod p.
   bytes crt = 8;
 }
@@ -98,8 +112,35 @@ message RSAPrivateKey {
 message RSAPublicKey {
   // Modulus.
   bytes n = 1;
+
   // Public exponent.
   bytes e = 2;
+}
+
+// Proto representation for ATHM public key related fields and parameters needed
+// for the cryptographic operations.
+message AthmPublicKeyAndParameters {
+  // Public key.
+  bytes public_key = 1;
+
+  // public_key_proof.
+  bytes public_key_proof = 2;
+
+  // Public parameters.
+  bytes public_params = 3;
+
+  // n_buckets.
+  int32 n_buckets = 4;
+
+  // deployment_id.
+  bytes deployment_id = 5;
+}
+
+// Proto representation for ATHM private key needed for the cryptographic
+// operations.
+message AthmPrivateKey {
+  // Private key.
+  bytes private_key = 1;
 }
 
 // Next ID: 13
@@ -110,7 +151,7 @@ message RSABlindSignaturePublicKey {
   // Version number of public key.
   uint64 key_version = 1;
 
-  // Serialization of the public key.
+  // Proto serialization of anonymous_tokens.RSAPublicKey.
   bytes serialized_public_key = 2;
 
   // Timestamp of expiration.
@@ -148,6 +189,53 @@ message RSABlindSignaturePublicKey {
   bool public_metadata_support = 12;
 }
 
+// Next ID: 9
+message ATHMPrivacyPassPublicKey {
+  // Use case associated with this public key.
+  bytes use_case = 1;
+
+  // Version number of public key.
+  //
+  // For Google use only.
+  int64 key_version = 5;
+
+  // Serialization (per the privacy pass specification) of the ATHM public key
+  //
+  // Note that this is NOT base64 encoded.
+  bytes public_key = 2;
+
+  // Serialization (per the privacy pass specification) of the zero-knowledge
+  // proof of knowledge of the corresponding private key
+  //
+  // Note that this is NOT base64 encoded.
+  bytes public_key_proof = 6;
+
+  // Supported number of private metadata buckets.
+  //
+  // This will be copied over from the internal config and will stay constant
+  // throughout the lifetime of the key, when it comes to the public key get
+  // request, the token sign request or the token redemption request
+  // corresponding to this public key.
+  int32 n_buckets = 7;
+
+  // Deployment ID for the protocol per the privacy pass specification.
+  //
+  // This will be copied over from the internal config and will stay constant
+  // throughout the lifetime of the key, when it comes to the public key get
+  // request, the token sign request or the token redemption request
+  // corresponding to this public key.
+  bytes deployment_id = 8;
+
+  // Key becomes valid at key_validity_start_time.
+  Timestamp key_validity_start_time = 3;
+
+  // Timestamp of expiration.
+  //
+  // Note that we will not return keys whose expiration times are in the past.
+  Timestamp expiration_time = 4;
+}
+
+// Next ID: 5
 message AnonymousTokensPublicKeysGetRequest {
   // Use case associated with this request.
   //
@@ -180,11 +268,16 @@ message AnonymousTokensPublicKeysGetRequest {
       ;
 }
 
+// Next ID: 3
 message AnonymousTokensPublicKeysGetResponse {
   // List of currently valid RSA public keys.
   repeated RSABlindSignaturePublicKey rsa_public_keys = 1;
+
+  // List of currently valid ATHM Privacy Pass public keys.
+  repeated ATHMPrivacyPassPublicKey athm_pp_public_key = 2;
 }
 
+// Next ID: 3
 message AnonymousTokensSignRequest {
   // Next ID: 6
   message BlindedToken {
@@ -199,6 +292,9 @@ message AnonymousTokensSignRequest {
     // The length of public metadata must be at most 2^32 bytes.
     bytes public_metadata = 4;
 
+    // Always set this value to true. This field will be deprecated in the
+    // future. Setting it to false is only done by legacy clients.
+    //
     // This value is disregarded for standard blind RSA signatures.
     //
     // For the public metadata protocol, if this value is set to false, the
@@ -211,12 +307,31 @@ message AnonymousTokensSignRequest {
     bytes serialized_token = 3;
   }
 
+  // Next ID: 4
+  message ATHMPrivacyPassTokenRequest {
+    // Use case associated with this request.
+    bytes use_case = 1;
+
+    // Hidden metadata to be tied to the token response.
+    bytes metadata_to_hide = 2;
+
+    // Serialization of the token request (named TokenRequest in the privacy
+    // pass specification).
+    //
+    // Note that this should NOT be base64 encoded.
+    bytes serialized_token_request = 3;
+  }
+
   // Token(s) that have been blinded by the user, not yet signed
   repeated BlindedToken blinded_tokens = 1;
+
+  // Token requests for ATHM that have been blinded by the user, not yet signed
+  repeated ATHMPrivacyPassTokenRequest athm_pp_token_request = 2;
 }
 
+// Next ID: 3
 message AnonymousTokensSignResponse {
-  //  Next ID: 7
+  //  Next ID: 8
   message AnonymousToken {
     // Use case associated with this anonymous token.
     bytes use_case = 1;
@@ -230,6 +345,9 @@ message AnonymousTokensSignResponse {
     // The length of public metadata must fit in 4 bytes.
     bytes public_metadata = 4;
 
+    // Always set this value to true. This field will be deprecated in the
+    // future. Setting it to false is only done by legacy clients.
+    //
     // This value is disregarded for standard blind RSA signatures.
     //
     // For the public metadata protocol, if this value is set to false, the
@@ -244,12 +362,51 @@ message AnonymousTokensSignResponse {
     // Serialization of the signed token. This will have to be `unblinded` by
     // the user before it can be used / redeemed.
     bytes serialized_token = 3;
+
+    // Timestamp of expiration of the key used to generate the sign token
+    // response.
+    //
+    // Note that after the key_expiration_time, the client devices might not
+    // have the key to create the final token from the serialized_token. Even if
+    // the client has the key, the server will not redeem the newly created
+    // token created using expired key.
+    Timestamp key_expiration_time = 7;
+  }
+
+  //  Next ID: 5
+  message ATHMPrivacyPassTokenResponse {
+    // Use case associated with this anonymous token.
+    bytes use_case = 1;
+
+    // Serialization of the token request (copied over from the
+    // AnonymousTokensSignRequest).
+    //
+    // Note that this should NOT be base64 encoded.
+    bytes serialized_token_request = 2;
+
+    // Serialization of the token response (named TokenResponse in the privacy
+    // pass specification).
+    //
+    // Note that this will NOT be base64 encoded.
+    bytes serialized_token_response = 3;
+
+    // Timestamp of expiration of the key used to generate the token response.
+    //
+    // Note that after the key_expiration_time, the client devices might not
+    // have the key to create the token from the token response. Even if the
+    // client has the key, the server will not redeem the newly created token
+    // created using expired key.
+    Timestamp key_expiration_time = 4;
   }
 
   // Returned anonymous token(s)
   repeated AnonymousToken anonymous_tokens = 1;
+
+  // Returned ATHM Privacy Pass token(s).
+  repeated ATHMPrivacyPassTokenResponse athm_pp_token_response = 2;
 }
 
+// Next ID: 4
 message AnonymousTokensRedemptionRequest {
   // Next ID: 7
   message AnonymousTokenToRedeem {
@@ -276,10 +433,65 @@ message AnonymousTokensRedemptionRequest {
     bytes message_mask = 6;
   }
 
+  // Next ID: 4
+  // https://www.rfc-editor.org/rfc/rfc9578.html#section-6.3-4
+  // https://www.ietf.org/archive/id/draft-ietf-privacypass-public-metadata-issuance-00.html#section-6.3-5
+  message RSABlindSignaturePrivacyPassTokenToRedeem {
+    // Use case associated with this anonymous token that needs to be redeemed.
+    bytes use_case = 1;
+
+    // Serialization of the unblinded token per privacy pass specification that
+    // needs to be redeemed.
+    //
+    // Note it should NOT be base64 encoded.
+    bytes serialized_unblinded_token = 2;
+
+    // For the public metadata rsa blind signature protocol, client also needs
+    // to provide the encoded extensions (public metadata) per the privacy pass
+    // specification.
+    // https://www.ietf.org/archive/id/draft-ietf-privacypass-public-metadata-issuance-00.html#section-6.3-7
+    //
+    // Note that this should NOT be base64 encoded.
+    bytes encoded_extensions = 3;
+  }
+
+  // Next ID: 3
+  message ATHMPrivacyPassTokenToRedeem {
+    // Use case associated with this redemption.
+    bytes use_case = 1;
+
+    // Serialization of the token per the privacy pass specification that will
+    // be redeemed.
+    //
+    // Note that this should NOT be base64 encoded.
+    bytes serialized_unblinded_token = 2;
+  }
+
+  // Redemption request results in error if use cases or key versions (or
+  // privacy pass issuer key ids) across each token within
+  // anonymous_tokens_to_redeem (or within
+  // rsa_blind_signature_pp_token_to_redeem, or within athm_pp_token_to_redeem)
+  // differ. This error is returned before any token is checked for redemption.
+  // Once all validation checks pass, only then are the tokens checked for
+  // redemption and double spending. Any errors that occur during redemption or
+  // double spending check are loggged and ignored. And the response fields for
+  // the token are populated accordingly. This is to prevent errors from one
+  // token from affecting the redemption of another token.
+  // This is the desired output as it gives users all the necessary information
+  // for their business/product logic and decisions.
+
   // One or more anonymous tokens to redeem.
   repeated AnonymousTokenToRedeem anonymous_tokens_to_redeem = 1;
+
+  // One or more RSA blind signature privacy pass tokens (PAT tokens) to redeem.
+  repeated RSABlindSignaturePrivacyPassTokenToRedeem
+      rsa_blind_signature_pp_token_to_redeem = 2;
+
+  // One or more ATHM Privacy Pass tokens to redeem.
+  repeated ATHMPrivacyPassTokenToRedeem athm_pp_token_to_redeem = 3;
 }
 
+// Next ID: 4
 message AnonymousTokensRedemptionResponse {
   // Next ID: 9
   message AnonymousTokenRedemptionResult {
@@ -316,9 +528,69 @@ message AnonymousTokensRedemptionResponse {
     bool double_spent = 2;
   }
 
+  // Next ID: 6
+  message RSABlindSignaturePrivacyPassRedemptionResult {
+    // Use case associated with this redeemed anonymous token.
+    bytes use_case = 1;
+
+    // Serialization of the unblinded anonymous token per privacy pass
+    // specification (copied over from the request).
+    //
+    // Note it will not be base64 encoded.
+    bytes serialized_unblinded_token = 2;
+
+    // For the public metadata rsa blind signature protocol, client also needs
+    // to provide the encoded extensions (public metadata) per the privacy pass
+    // specification (copied over from the request).
+    // https://www.ietf.org/archive/id/draft-ietf-privacypass-public-metadata-issuance-00.html#section-6.3-7
+    //
+    // Note it will not be base64 encoded.
+    bytes encoded_extensions = 5;
+
+    // Returns true if and only if the anonymous token was redeemed
+    // successfully i.e. token was cryptographically verified, all relevant
+    // state in the server was updated successfully and the token was not
+    // redeemed already.
+    bool redeemed = 3;
+
+    // Returns true if and only if the anonymous token has already been
+    // redeemed.
+    bool double_spent = 4;
+  }
+
+  // Next ID: 6
+  message ATHMPrivacyPassRedemptionResult {
+    // Use case associated with this redemption.
+    bytes use_case = 1;
+
+    // Serialization of the token in the request (copied over from the request).
+    //
+    // Note that this should NOT be base64 encoded.
+    bytes serialized_unblinded_token = 2;
+
+    // Returns true if and only if the token was redeemed successfully i.e.
+    // token was cryptographically verified, all relevant state in the server
+    // was updated successfully and the token was not redeemed already.
+    bool redeemed = 3;
+
+    // Returns true if and only if the token has already been redeemed.
+    bool double_spent = 4;
+
+    // Metadata extracted from the redeemed token.
+    bytes hidden_metadata = 5;
+  }
+
   // Redemption response for requested anonymous tokens.
   repeated AnonymousTokenRedemptionResult anonymous_token_redemption_results =
       1;
+
+  // Redemption response for requested RSA blind signature privacy pass tokens
+  // (PAT tokens).
+  repeated RSABlindSignaturePrivacyPassRedemptionResult
+      rsa_blind_signature_pp_redemption_result = 2;
+
+  // Redemption response for requested ATHM Privacy Pass tokens.
+  repeated ATHMPrivacyPassRedemptionResult athm_pp_redemption_result = 3;
 }
 
 // Plaintext message with public metadata.

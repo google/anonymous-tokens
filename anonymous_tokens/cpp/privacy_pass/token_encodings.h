@@ -27,11 +27,18 @@
 
 namespace anonymous_tokens {
 
-// blinded_token_request will be encoded in 256 bytes for token type DA7A.
-constexpr int kDA7ABlindedTokenRequestSizeInBytes = 256;
+// size of blinded_token in request when rsa modulus size is 256 bytes.
+constexpr int kBlindedTokenSizeInBytes256 = 256;
 
-// TokenRequest struct will be encoded in 259 bytes for token type DA7A.
-constexpr int kDA7AMarshaledTokenRequestSizeInBytes = 259;
+// size of blinded_token in request when rsa modulus size is 512 bytes.
+constexpr int kBlindedTokenSizeInBytes512 = 512;
+
+constexpr int kSizeofTokenTypeInBytes2 = 2;
+
+constexpr int kSizeofTruncatedTokenKeyIdInBytes1 = 1;
+
+// This size serves as an initial estimate.
+constexpr int kSizeofBufferForEncodedExtensionsInBytes = 41;
 
 // Timestamp precision must be at least 15 minutes.
 constexpr int kFifteenMinutesInSeconds = 900;
@@ -105,6 +112,7 @@ struct ServiceType {
   static constexpr ServiceTypeId kChromeIpBlinding = 0x01;
   static constexpr ServiceTypeId kCronetIpBlinding = 0x02;
   static constexpr ServiceTypeId kWebviewIpBlinding = 0x03;
+  static constexpr ServiceTypeId kPrivateAratea = 0x04;
   ServiceTypeId service_type_id;
 
   // Derived in FromExtension from service_type_id.
@@ -142,6 +150,7 @@ struct DebugMode {
 // the request is intended for them.
 //  - 0x00 is proxy A.
 //  - 0x01 is proxy B.
+//  - 0x02 is the terminal layer.
 //  - Any other mode value is invalid.
 // Represents a private extension using id 0xF003.
 struct ProxyLayer {
@@ -151,6 +160,7 @@ struct ProxyLayer {
   typedef uint8_t Layer;
   static constexpr Layer kProxyA = 0x00;
   static constexpr Layer kProxyB = 0x01;
+  static constexpr Layer kTerminalLayer = 0x02;
   Layer layer;
 
   absl::StatusOr<Extension> AsExtension() const;
@@ -210,23 +220,19 @@ struct TokenChallenge {
 // signature.
 //
 // It does not require the authenticator field to be populated.
-absl::StatusOr<std::string> AuthenticatorInput(
-    const Token& token);
+absl::StatusOr<std::string> AuthenticatorInput(const Token& token);
 
 // This methods takes in a Token structure and encodes it into a string.
-absl::StatusOr<std::string> MarshalToken(
-    const Token& token);
+absl::StatusOr<std::string> MarshalToken(const Token& token);
 
 // This methods takes in an encoded Token and decodes it into a Token struct.
 absl::StatusOr<Token> UnmarshalToken(std::string token);
 
 // This methods takes in an Extension struct and encodes it into a string.
-absl::StatusOr<std::string> EncodeExtension(
-    const Extension& extension);
+absl::StatusOr<std::string> EncodeExtension(const Extension& extension);
 
 // This methods takes in an Extensions struct and encodes it into a string.
-absl::StatusOr<std::string> EncodeExtensions(
-    const Extensions& extensions);
+absl::StatusOr<std::string> EncodeExtensions(const Extensions& extensions);
 
 // This methods takes a string of encoded extensions and decodes it to an
 // Extensions struct.
@@ -251,10 +257,12 @@ absl::StatusOr<TokenRequest> UnmarshalTokenRequest(
 absl::StatusOr<std::string> MarshalExtendedTokenRequest(
     const ExtendedTokenRequest& extended_token_request);
 
-// This methods takes in an encoded ExtendedTokenRequest and decodes it into a
+// This methods takes in an encoded ExtendedTokenRequest and the size of the
+// blinded token request in bytes (either 256 or 512) and decodes it into a
 // ExtendedTokenRequest struct.
-absl::StatusOr<ExtendedTokenRequest>
-UnmarshalExtendedTokenRequest(absl::string_view extended_token_request);
+absl::StatusOr<ExtendedTokenRequest> UnmarshalExtendedTokenRequest(
+    absl::string_view extended_token_request,
+    int blinded_token_size = kBlindedTokenSizeInBytes256);
 
 // This method takes in an Extensions struct, checks that the ordering matches
 // the given ordering in expected_types, and validates extension values.

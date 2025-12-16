@@ -23,9 +23,10 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
-#include "absl/time/time.h"
+#include "absl/status/statusor.h"
 #include "anonymous_tokens/cpp/crypto/anonymous_tokens_pb_openssl_converters.h"
 #include "anonymous_tokens/cpp/crypto/crypto_utils.h"
+#include "anonymous_tokens/cpp/crypto/rsa_ssa_pss_verifier.h"
 #include "anonymous_tokens/cpp/shared/proto_utils.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
@@ -263,10 +264,58 @@ AnonymousTokensRsaBssaClient::ProcessResponse(
 }
 
 absl::Status AnonymousTokensRsaBssaClient::Verify(
-    const RSABlindSignaturePublicKey& /*public_key*/,
-    const RSABlindSignatureToken& /*token*/,
-    const PlaintextMessageWithPublicMetadata& /*input*/) {
-  return absl::UnimplementedError("Verify not implemented yet.");
+    const RSABlindSignaturePublicKey& public_key,
+    const RSABlindSignatureToken& token,
+    const PlaintextMessageWithPublicMetadata& input) {
+  // Validate and parse the public key.
+  ANON_TOKENS_RETURN_IF_ERROR(ValidityChecksForClientCreation(public_key));
+  RSAPublicKey rsa_public_key_proto;
+  if (!rsa_public_key_proto.ParseFromString(
+          public_key.serialized_public_key())) {
+    return absl::InvalidArgumentError("Public key is malformed.");
+  }
+  // Validate the message mask.
+  switch (public_key.message_mask_type()) {
+    case AT_MESSAGE_MASK_CONCAT:
+      if (token.message_mask().length() != public_key.message_mask_size()) {
+        return absl::InvalidArgumentError("Invalid message mask size.");
+      }
+      break;
+    case AT_MESSAGE_MASK_NO_MASK:
+      if (!token.message_mask().empty()) {
+        return absl::InvalidArgumentError(
+            "Message mask should be of size 0 bytes.");
+      }
+      break;
+    default:
+      return absl::InvalidArgumentError(
+          "Message mask type must be defined and supported.");
+  }
+
+  // Generate the inputs to the verifier.
+  // Owned by BoringSSL.
+  ANON_TOKENS_ASSIGN_OR_RETURN(
+      const EVP_MD* sig_hash,
+      ProtoHashTypeToEVPDigest(public_key.sig_hash_type()));
+  // Owned by BoringSSL.
+  ANON_TOKENS_ASSIGN_OR_RETURN(
+      const EVP_MD* mgf1_hash,
+      ProtoMaskGenFunctionToEVPDigest(public_key.mask_gen_function()));
+  std::optional<std::string> public_metadata = std::nullopt;
+  if (public_key.public_metadata_support()) {
+    // Empty public metadata is a valid value.
+    public_metadata = input.public_metadata();
+  }
+
+  // Verify the signature for correctness.
+  ANON_TOKENS_ASSIGN_OR_RETURN(
+      std::unique_ptr<RsaSsaPssVerifier> verifier,
+      RsaSsaPssVerifier::New(
+          public_key.salt_length(), sig_hash, mgf1_hash, rsa_public_key_proto,
+          /*use_rsa_public_exponent=*/false, public_metadata));
+  return verifier->Verify(
+      token.token(),
+      MaskMessageConcat(token.message_mask(), input.plaintext_message()));
 }
 
 }  // namespace anonymous_tokens

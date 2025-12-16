@@ -15,6 +15,7 @@
 #include "anonymous_tokens/cpp/client/anonymous_tokens_rsa_bssa_client.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -33,7 +34,6 @@
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include "anonymous_tokens/proto/anonymous_tokens.pb.h"
 #include <openssl/base.h>
-#include <openssl/rsa.h>
 
 namespace anonymous_tokens {
 namespace {
@@ -119,6 +119,22 @@ absl::StatusOr<AnonymousTokensSignResponse> CreateResponse(
         blind_signer->Sign(request_token.serialized_token()));
   }
   return response;
+}
+
+void RunVerifier(const std::vector<RSABlindSignatureTokenWithInput>& tokens,
+                 const RSABlindSignaturePublicKey& public_key,
+                 bool expected_verification_success = true) {
+  for (const RSABlindSignatureTokenWithInput& token : tokens) {
+    if (expected_verification_success) {
+      EXPECT_TRUE(AnonymousTokensRsaBssaClient::Verify(
+                      public_key, token.token(), token.input())
+                      .ok());
+    } else {
+      EXPECT_FALSE(AnonymousTokensRsaBssaClient::Verify(
+                       public_key, token.token(), token.input())
+                       .ok());
+    }
+  }
 }
 
 TEST(CreateAnonymousTokensRsaBssaClientTest, Success) {
@@ -217,7 +233,10 @@ TEST_F(AnonymousTokensRsaBssaClientTest, SuccessOneMessage) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(AnonymousTokensSignResponse response,
                                    CreateResponse(request, private_key_));
   EXPECT_THAT(response.anonymous_tokens(), SizeIs(1));
-  EXPECT_TRUE(client_->ProcessResponse(response).ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      client_->ProcessResponse(response));
+  RunVerifier(tokens, public_key_);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientTest, SuccessMultipleMessages) {
@@ -229,7 +248,10 @@ TEST_F(AnonymousTokensRsaBssaClientTest, SuccessMultipleMessages) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(AnonymousTokensSignResponse response,
                                    CreateResponse(request, private_key_));
   EXPECT_THAT(response.anonymous_tokens(), SizeIs(4));
-  EXPECT_TRUE(client_->ProcessResponse(response).ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      client_->ProcessResponse(response));
+  RunVerifier(tokens, public_key_);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientTest, SuccessMultipleMessagesNoMessageMask) {
@@ -258,6 +280,7 @@ TEST_F(AnonymousTokensRsaBssaClientTest, SuccessMultipleMessagesNoMessageMask) {
        finalized_tokens_with_inputs) {
     EXPECT_TRUE(token_with_input.token().message_mask().empty());
   }
+  RunVerifier(finalized_tokens_with_inputs, public_key);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientTest, EnsureRandomTokens) {
@@ -278,6 +301,7 @@ TEST_F(AnonymousTokensRsaBssaClientTest, EnsureRandomTokens) {
   }
   EXPECT_NE(tokens[0].token().message_mask(), tokens[1].token().message_mask());
   EXPECT_NE(tokens[0].token().token(), tokens[1].token().token());
+  RunVerifier(tokens, public_key_);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientTest, EmptyInput) {
@@ -420,7 +444,10 @@ TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
       AnonymousTokensSignResponse response,
       CreateResponse(request, private_key_, /*enable_public_metadata=*/true));
   EXPECT_THAT(response.anonymous_tokens(), SizeIs(1));
-  EXPECT_TRUE(public_metadata_client_->ProcessResponse(response).ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      public_metadata_client_->ProcessResponse(response));
+  RunVerifier(tokens, public_key_);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
@@ -497,7 +524,35 @@ TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
       AnonymousTokensSignResponse response,
       CreateResponse(request, private_key_, /*enable_public_metadata=*/true));
   EXPECT_THAT(response.anonymous_tokens(), SizeIs(4));
-  EXPECT_TRUE(public_metadata_client_->ProcessResponse(response).ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      public_metadata_client_->ProcessResponse(response));
+  RunVerifier(tokens, public_key_);
+}
+
+TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
+       FailureToVerifyWithCorruptedTokens) {
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<PlaintextMessageWithPublicMetadata> input_messages,
+      CreateInput({"message1", "msg2", "anotherMessage", "one_more_message"},
+                  {"md1", "md2", "md3", "md4"}));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      AnonymousTokensSignRequest request,
+      public_metadata_client_->CreateRequest(input_messages));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      AnonymousTokensSignResponse response,
+      CreateResponse(request, private_key_, /*enable_public_metadata=*/true));
+  EXPECT_THAT(response.anonymous_tokens(), SizeIs(4));
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      public_metadata_client_->ProcessResponse(response));
+  // corrupt the tokens
+  for (auto& token : tokens) {
+    std::string token_bytes = token.token().token();
+    token_bytes[50] = 'a';
+    token.mutable_token()->set_token(token_bytes);
+  }
+  RunVerifier(tokens, public_key_, /*expected_verification_success=*/false);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
@@ -514,7 +569,10 @@ TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
       AnonymousTokensSignResponse response,
       CreateResponse(request, private_key_, /*enable_public_metadata=*/true));
   EXPECT_THAT(response.anonymous_tokens(), SizeIs(4));
-  EXPECT_TRUE(public_metadata_client_->ProcessResponse(response).ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      public_metadata_client_->ProcessResponse(response));
+  RunVerifier(tokens, public_key_);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
@@ -530,7 +588,10 @@ TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
       AnonymousTokensSignResponse response,
       CreateResponse(request, private_key_, /*enable_public_metadata=*/true));
   EXPECT_THAT(response.anonymous_tokens(), SizeIs(4));
-  EXPECT_TRUE(public_metadata_client_->ProcessResponse(response).ok());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      std::vector<RSABlindSignatureTokenWithInput> tokens,
+      public_metadata_client_->ProcessResponse(response));
+  RunVerifier(tokens, public_key_);
 }
 
 TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
@@ -564,6 +625,7 @@ TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
        finalized_tokens_with_inputs) {
     EXPECT_TRUE(token_with_input.token().message_mask().empty());
   }
+  RunVerifier(finalized_tokens_with_inputs, public_key);
 }
 
 }  // namespace

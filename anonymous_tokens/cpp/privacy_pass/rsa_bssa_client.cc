@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "anonymous_tokens/cpp/privacy_pass/rsa_bssa_public_metadata_client.h"
+#include "anonymous_tokens/cpp/privacy_pass/rsa_bssa_client.h"
 
 #include <memory>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -33,41 +34,38 @@ namespace anonymous_tokens {
 namespace {
 
 absl::Status CheckKeySize(const RSA& key) {
-  if (uint size = RSA_size(&key);
-      size != kRsaModulusSizeInBytes256 && size != kRsaModulusSizeInBytes512) {
+  if (RSA_size(&key) != kRsaModulusSizeInBytes256) {
     return absl::InvalidArgumentError(
-        "Token type DA7A must use RSA key with the modulus of size 256 or 512 "
-        "bytes");
+        "Token type 0002 must use RSA key with the modulus of size 256 bytes.");
   }
   return absl::OkStatus();
 }
 
 }  // namespace
 
-absl::StatusOr<std::unique_ptr<PrivacyPassRsaBssaPublicMetadataClient>>
-PrivacyPassRsaBssaPublicMetadataClient::Create(const RSA& rsa_public_key) {
+absl::StatusOr<std::unique_ptr<PrivacyPassRsaBssaClient>>
+PrivacyPassRsaBssaClient::Create(const RSA& rsa_public_key) {
   ANON_TOKENS_RETURN_IF_ERROR(CheckKeySize(rsa_public_key));
-  uint modulus_size = RSA_size(&rsa_public_key);
 
   // Create modulus and public exponent strings.
   ANON_TOKENS_ASSIGN_OR_RETURN(
       const std::string rsa_modulus,
-      BignumToString(*RSA_get0_n(&rsa_public_key), modulus_size));
+      BignumToString(*RSA_get0_n(&rsa_public_key), kRsaModulusSizeInBytes256));
   ANON_TOKENS_ASSIGN_OR_RETURN(
       const std::string rsa_e,
-      BignumToString(*RSA_get0_e(&rsa_public_key), modulus_size));
+      BignumToString(*RSA_get0_e(&rsa_public_key), kRsaModulusSizeInBytes256));
 
   // Create hash digest methods.
   const EVP_MD* signature_hash_function = EVP_sha384();
   const EVP_MD* mgf1_hash_function = EVP_sha384();
 
   // Create and return client.
-  return absl::WrapUnique(new PrivacyPassRsaBssaPublicMetadataClient(
+  return absl::WrapUnique(new PrivacyPassRsaBssaClient(
       kSaltLengthInBytes48, rsa_modulus, rsa_e, signature_hash_function,
       mgf1_hash_function));
 }
 
-PrivacyPassRsaBssaPublicMetadataClient::PrivacyPassRsaBssaPublicMetadataClient(
+PrivacyPassRsaBssaClient::PrivacyPassRsaBssaClient(
     const int salt_length, const std::string rsa_modulus,
     const std::string rsa_e, const EVP_MD* signature_hash_function,
     const EVP_MD* mgf1_hash_function)
@@ -77,10 +75,9 @@ PrivacyPassRsaBssaPublicMetadataClient::PrivacyPassRsaBssaPublicMetadataClient(
       signature_hash_function_(signature_hash_function),
       mgf1_hash_function_(mgf1_hash_function) {}
 
-absl::StatusOr<ExtendedTokenRequest>
-PrivacyPassRsaBssaPublicMetadataClient::CreateTokenRequest(
+absl::StatusOr<TokenRequest> PrivacyPassRsaBssaClient::CreateTokenRequest(
     const absl::string_view challenge, const absl::string_view nonce,
-    const absl::string_view token_key_id, const Extensions& extensions) {
+    const absl::string_view token_key_id) {
   // Basic validity checks.
   if (rsa_blinder_ != nullptr) {
     return absl::FailedPreconditionError(
@@ -101,17 +98,12 @@ PrivacyPassRsaBssaPublicMetadataClient::CreateTokenRequest(
             /*nonce=*/std::string(nonce),
             /*context=*/context};
 
-  // Encode extensions to string.
-  ANON_TOKENS_ASSIGN_OR_RETURN(const std::string encoded_extensions,
-                               EncodeExtensions(extensions));
-
   // Create RsaBlinder object.
   ANON_TOKENS_ASSIGN_OR_RETURN(
       rsa_blinder_,
       RsaBlinder::New(rsa_modulus_, rsa_e_, signature_hash_function_,
                       mgf1_hash_function_, salt_length_,
-                      /*use_rsa_public_exponent=*/false,
-                      /*public_metadata=*/encoded_extensions));
+                      /*use_rsa_public_exponent=*/false));
 
   // Call Blind on an encoding of the input message.
   ANON_TOKENS_ASSIGN_OR_RETURN(authenticator_input_,
@@ -127,13 +119,10 @@ PrivacyPassRsaBssaPublicMetadataClient::CreateTokenRequest(
       static_cast<uint8_t>(token_key_id[token_key_id.size() - 1]),
       /*blinded_token_request=*/blinded_message};
 
-  // ExtendedTokenRequest carries the public metadata / encoded extensions list.
-  ExtendedTokenRequest extended_token_request = {/*request=*/token_request,
-                                                 /*extensions=*/extensions};
-  return extended_token_request;
+  return token_request;
 }
 
-absl::StatusOr<Token> PrivacyPassRsaBssaPublicMetadataClient::FinalizeToken(
+absl::StatusOr<Token> PrivacyPassRsaBssaClient::FinalizeToken(
     const absl::string_view blinded_signature) {
   if (rsa_blinder_ == nullptr) {
     return absl::FailedPreconditionError(
@@ -152,15 +141,9 @@ absl::StatusOr<Token> PrivacyPassRsaBssaPublicMetadataClient::FinalizeToken(
   return token_;
 }
 
-absl::Status PrivacyPassRsaBssaPublicMetadataClient::Verify(
-    Token token_to_verify, const absl::string_view encoded_extensions,
-    RSA& rsa_public_key) {
+absl::Status PrivacyPassRsaBssaClient::Verify(Token token_to_verify,
+                                              RSA& rsa_public_key) {
   ANON_TOKENS_RETURN_IF_ERROR(CheckKeySize(rsa_public_key));
-  ANON_TOKENS_ASSIGN_OR_RETURN(
-      bssl::UniquePtr<RSA> derived_rsa_public_key,
-      CreatePublicKeyRSAWithPublicMetadata(
-          *RSA_get0_n(&rsa_public_key), *RSA_get0_e(&rsa_public_key),
-          encoded_extensions, /*use_rsa_public_exponent=*/false));
 
   // Prepare input parameters for the verification function.
   const EVP_MD* signature_hash_function = EVP_sha384();
@@ -168,13 +151,11 @@ absl::Status PrivacyPassRsaBssaPublicMetadataClient::Verify(
 
   ANON_TOKENS_ASSIGN_OR_RETURN(const std::string authenticator_input,
                                AuthenticatorInput(token_to_verify));
-  std::string augmented_message =
-      EncodeMessagePublicMetadata(authenticator_input, encoded_extensions);
 
   return RsaBlindSignatureVerify(
       kSaltLengthInBytes48, signature_hash_function, mgf1_hash_function,
       /*signature=*/token_to_verify.authenticator,
-      /*message=*/augmented_message, derived_rsa_public_key.get());
+      /*message=*/authenticator_input, &rsa_public_key);
 }
 
 }  // namespace anonymous_tokens

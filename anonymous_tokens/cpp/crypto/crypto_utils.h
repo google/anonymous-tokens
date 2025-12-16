@@ -100,9 +100,6 @@ std::string MaskMessageConcat(absl::string_view mask,
 std::string EncodeMessagePublicMetadata(absl::string_view message,
                                         absl::string_view public_metadata);
 
-// Compute 2^(x - 1/2).
-absl::StatusOr<bssl::UniquePtr<BIGNUM> > GetRsaSqrtTwo(int x);
-
 // Compute compute 2^x.
 absl::StatusOr<bssl::UniquePtr<BIGNUM> > ComputePowerOfTwo(int x);
 
@@ -206,6 +203,20 @@ absl::Status RsaBlindSignatureVerify(int salt_length, const EVP_MD* sig_hash,
 // https://github.com/cloudflare/pat-go/blob/11579ba5b0b9b77d3e8e3d5247a98811227ac82e/x509util.go#L56
 //
 absl::StatusOr<std::string> RsaSsaPssPublicKeyToDerEncoding(const RSA* rsa);
+
+// This method parses a DER encoding of RSASSA-PSS (RSA Signature Scheme with
+// Appendix - Probabilistic Signature Scheme) Public Key as described here
+// https://datatracker.ietf.org/doc/html/rfc3447.html using the object
+// identifier(s) here: https://oidref.com/1.2.840.113549.1.1.10  and using a
+// fixed salt length of 48 bytes, SHA384 as the signature's hash function as
+// well as the hash function that the signature's mask generating function is
+// based on. A publicly availble equivalent function is available in Goa here:
+// https://github.com/cloudflare/pat-go/blob/11579ba5b0b9b77d3e8e3d5247a98811227ac82e/x509util.go#L106
+// This method does not check whether the parameters and object identifiers
+// were correctly decoded. It only properly verifies and decodes the RSA public
+// key.
+absl::StatusOr<bssl::UniquePtr<RSA> > RsaSsaPssPublicKeyFromDerEncoding(
+    absl::string_view der_encoding);
 
 // This method DER encodes inputted RSA public keys and hashes the encodings
 // using SHA256. It returns true if the hashes collide on the least significant

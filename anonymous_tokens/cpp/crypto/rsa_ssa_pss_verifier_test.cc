@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include <gmock/gmock.h>
@@ -39,8 +40,8 @@ TEST(RsaSsaPssVerifier, SuccessfulVerification) {
       GetIetfStandardRsaBlindSignatureTestVector();
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const auto test_keys,
                                    GetIetfStandardRsaBlindSignatureTestKeys());
-  const EVP_MD *sig_hash = EVP_sha384();   // Owned by BoringSSL
-  const EVP_MD *mgf1_hash = EVP_sha384();  // Owned by BoringSSL
+  const EVP_MD* sig_hash = EVP_sha384();   // Owned by BoringSSL
+  const EVP_MD* mgf1_hash = EVP_sha384();  // Owned by BoringSSL
   const int salt_length = kSaltLengthInBytes48;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto verifier,
@@ -54,8 +55,8 @@ TEST(RsaSsaPssVerifier, InvalidSignature) {
       GetIetfStandardRsaBlindSignatureTestVector();
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const auto test_keys,
                                    GetIetfStandardRsaBlindSignatureTestKeys());
-  const EVP_MD *sig_hash = EVP_sha384();   // Owned by BoringSSL
-  const EVP_MD *mgf1_hash = EVP_sha384();  // Owned by BoringSSL
+  const EVP_MD* sig_hash = EVP_sha384();   // Owned by BoringSSL
+  const EVP_MD* mgf1_hash = EVP_sha384();  // Owned by BoringSSL
   const int salt_length = kSaltLengthInBytes48;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto verifier,
@@ -75,8 +76,8 @@ TEST(RsaSsaPssVerifier, InvalidSignature) {
 TEST(RsaSsaPssVerifier, InvalidVerificationKey) {
   const IetfStandardRsaBlindSignatureTestVector test_vec =
       GetIetfStandardRsaBlindSignatureTestVector();
-  const EVP_MD *sig_hash = EVP_sha384();   // Owned by BoringSSL
-  const EVP_MD *mgf1_hash = EVP_sha384();  // Owned by BoringSSL
+  const EVP_MD* sig_hash = EVP_sha384();   // Owned by BoringSSL
+  const EVP_MD* mgf1_hash = EVP_sha384();  // Owned by BoringSSL
   const int salt_length = kSaltLengthInBytes48;
   // wrong key
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto new_keys_pair, GetStandardRsaKeyPair());
@@ -96,8 +97,8 @@ TEST(RsaSsaPssVerifier, InvalidVerificationKey) {
 TEST(RsaSsaPssVerifierTestWithPublicMetadata,
      EmptyMessageStandardVerificationSuccess) {
   absl::string_view message = "";
-  const EVP_MD *sig_hash = EVP_sha384();   // Owned by BoringSSL
-  const EVP_MD *mgf1_hash = EVP_sha384();  // Owned by BoringSSL
+  const EVP_MD* sig_hash = EVP_sha384();   // Owned by BoringSSL
+  const EVP_MD* mgf1_hash = EVP_sha384();  // Owned by BoringSSL
   const int salt_length = kSaltLengthInBytes48;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const auto test_key,
                                    GetStandardRsaKeyPair());
@@ -120,13 +121,13 @@ TEST(RsaSsaPssVerifierTestWithPublicMetadata,
 TEST(RsaSsaPssVerifierTestWithPublicMetadata,
      IetfRsaBlindSignaturesWithPublicMetadataTestVectorsSuccess) {
   auto test_vectors = GetIetfRsaBlindSignatureWithPublicMetadataTestVectors();
-  const EVP_MD *sig_hash = EVP_sha384();   // Owned by BoringSSL
-  const EVP_MD *mgf1_hash = EVP_sha384();  // Owned by BoringSSL
+  const EVP_MD* sig_hash = EVP_sha384();   // Owned by BoringSSL
+  const EVP_MD* mgf1_hash = EVP_sha384();  // Owned by BoringSSL
   const int salt_length = kSaltLengthInBytes48;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto test_key,
       GetIetfRsaBlindSignatureWithPublicMetadataTestKeys());
-  for (const auto &test_vector : test_vectors) {
+  for (const auto& test_vector : test_vectors) {
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
         auto verifier,
         RsaSsaPssVerifier::New(salt_length, sig_hash, mgf1_hash, test_key.first,
@@ -144,13 +145,13 @@ TEST(RsaSsaPssVerifierTestWithPublicMetadata,
      IetfRsaBlindSignaturesWithPublicMetadataNoPublicExponentSuccess) {
   auto test_vectors =
       GetIetfPartiallyBlindRSASignatureNoPublicExponentTestVectors();
-  const EVP_MD *sig_hash = EVP_sha384();   // Owned by BoringSSL
-  const EVP_MD *mgf1_hash = EVP_sha384();  // Owned by BoringSSL
+  const EVP_MD* sig_hash = EVP_sha384();   // Owned by BoringSSL
+  const EVP_MD* mgf1_hash = EVP_sha384();  // Owned by BoringSSL
   const int salt_length = kSaltLengthInBytes48;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       const auto test_key,
       GetIetfRsaBlindSignatureWithPublicMetadataTestKeys());
-  for (const auto &test_vector : test_vectors) {
+  for (const auto& test_vector : test_vectors) {
     ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
         auto verifier,
         RsaSsaPssVerifier::New(salt_length, sig_hash, mgf1_hash, test_key.first,
@@ -165,7 +166,7 @@ using CreateTestKeyPairFunction =
     absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>>();
 
 using RsaSsaPssVerifierPublicMetadataTestParams =
-    std::tuple<CreateTestKeyPairFunction *,
+    std::tuple<CreateTestKeyPairFunction*,
                /*use_rsa_public_exponent*/ bool>;
 
 class RsaSsaPssVerifierTestWithPublicMetadata
@@ -186,8 +187,8 @@ class RsaSsaPssVerifierTestWithPublicMetadata
 
   RSAPublicKey public_key_;
   bssl::UniquePtr<RSA> private_key_;
-  const EVP_MD *sig_hash_;   // Owned by BoringSSL.
-  const EVP_MD *mgf1_hash_;  // Owned by BoringSSL.
+  const EVP_MD* sig_hash_;   // Owned by BoringSSL.
+  const EVP_MD* mgf1_hash_;  // Owned by BoringSSL.
   int salt_length_;
   bool use_rsa_public_exponent_;
 };

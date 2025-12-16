@@ -41,6 +41,7 @@ cc_library(
         "//anonymous_tokens/cpp/crypto:anonymous_tokens_pb_openssl_converters",
         "//anonymous_tokens/cpp/crypto:crypto_utils",
         "//anonymous_tokens/cpp/crypto:rsa_blinder",
+        "//anonymous_tokens/cpp/crypto:rsa_ssa_pss_verifier",
         "//anonymous_tokens/cpp/shared:proto_utils",
         "//anonymous_tokens/cpp/shared:status_utils",
         "//anonymous_tokens/proto:anonymous_tokens_cc_proto",

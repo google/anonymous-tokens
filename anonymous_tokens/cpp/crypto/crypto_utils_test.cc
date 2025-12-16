@@ -24,6 +24,7 @@
 #include "absl/strings/escaping.h"
 #include "anonymous_tokens/cpp/testing/utils.h"
 #include <openssl/base.h>
+#include <openssl/bn.h>
 #include <openssl/rsa.h>
 
 namespace anonymous_tokens {
@@ -57,16 +58,12 @@ TEST(AnonymousTokensCryptoUtilsTest, BignumToStringAndBack) {
   EXPECT_EQ(BN_cmp(bn_1.get(), bn_2.get()), 0);
 }
 
-TEST(AnonymousTokensCryptoUtilsTest, PowerOfTwoAndRsaSqrtTwo) {
-  // Compute 2^(10-1/2).
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> sqrt2,
-                                   GetRsaSqrtTwo(10));
+TEST(AnonymousTokensCryptoUtilsTest, PowerOfTwo) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> small_pow2,
                                    ComputePowerOfTwo(9));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> large_pow2,
                                    ComputePowerOfTwo(10));
-  EXPECT_GT(BN_cmp(sqrt2.get(), small_pow2.get()), 0);
-  EXPECT_LT(BN_cmp(sqrt2.get(), large_pow2.get()), 0);
+  EXPECT_LT(BN_cmp(small_pow2.get(), large_pow2.get()), 0);
 }
 
 TEST(AnonymousTokensCryptoUtilsTest, ComputeHashAcceptsNullStringView) {
@@ -413,6 +410,52 @@ TEST(AnonymousTokensCryptoUtilsTest, IetfPrivacyPassBlindRsaPublicKeyToDer) {
   EXPECT_EQ(result, expected_der_encoding);
 }
 
+TEST(AnonymousTokensCryptoUtilsTest, RsaSsaPssPublicKeyFromDerEncoding) {
+  std::string der_encoding;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "30820152303d06092a864886f70d01010a3030a00d300b0609608648016503040202a11a"
+      "301806092a864886f70d010108300b0609608648016503040202a2030201300382010f00"
+      "3082010a0282010100cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab"
+      "43c0df3a8c12993af12b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a2"
+      "24d6b02f09e5c374d0cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5"
+      "e794fc98a3139276879757ce453b526ef9bf6ceb99979b8423b90f4461a22af37aab0cf5"
+      "733f7597abe44d31c732db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbc"
+      "d78a337d17b1dba9e828bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2"
+      "073fe49740c01f00e109106066983d21e5f83f086e2e823c879cd43cef700d2a352a9bab"
+      "d612d03cad02db134b7e225a5f0203010001",
+      &der_encoding));
+
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
+      bssl::UniquePtr<RSA> rsa,
+      RsaSsaPssPublicKeyFromDerEncoding(der_encoding));
+
+  std::string expected_modulus;
+  ASSERT_TRUE(absl::HexStringToBytes(
+      "cb1aed6b6a95f5b1ce013a4cfcab25b94b2e64a23034e4250a7eab43c0df3a8c12993af1"
+      "2b111908d4b471bec31d4b6c9ad9cdda90612a2ee903523e6de5a224d6b02f09e5c374d0"
+      "cfe01d8f529c500a78a2f67908fa682b5a2b430c81eaf1af72d7b5e794fc98a313927687"
+      "9757ce453b526ef9bf6ceb99979b8423b90f4461a22af37aab0cf5733f7597abe44d31c7"
+      "32db68a181c6cbbe607d8c0e52e0655fd9996dc584eca0be87afbcd78a337d17b1dba9e8"
+      "28bbd81e291317144e7ff89f55619709b096cbb9ea474cead264c2073fe49740c01f00e1"
+      "09106066983d21e5f83f086e2e823c879cd43cef700d2a352a9babd612d03cad02db134b"
+      "7e225a5f",
+      &expected_modulus));
+  std::string expected_exponent;
+  ASSERT_TRUE(absl::HexStringToBytes("010001", &expected_exponent));
+
+  // Verify the modulus and exponent.
+  // Verify the modulus and exponent.
+  const BIGNUM* n = RSA_get0_n(rsa.get());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string n_str,
+                                   BignumToString(*n, BN_num_bytes(n)));
+  EXPECT_EQ(n_str, expected_modulus);
+
+  const BIGNUM* e = RSA_get0_e(rsa.get());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string e_str,
+                                   BignumToString(*e, BN_num_bytes(e)));
+  EXPECT_EQ(e_str, expected_exponent);
+}
+
 TEST(AnonymousTokensCryptoUtilsTest,
      PrivacyPassTruncatedTokenKeyIdCollisionSelf) {
   std::string rsa_modulus;
@@ -543,13 +586,9 @@ TEST_P(CryptoUtilsTest, PublicExponentCoprime) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       bssl::UniquePtr<BIGNUM> exp,
       ComputeExponentWithPublicMetadata(*rsa_modulus_.get(), metadata));
-  int rsa_mod_size_bits = BN_num_bits(rsa_modulus_.get());
   // Check that exponent is odd.
   EXPECT_EQ(BN_is_odd(exp.get()), 1);
   // Check that exponent is small enough.
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> sqrt2,
-                                   GetRsaSqrtTwo(rsa_mod_size_bits / 2));
-  EXPECT_LT(BN_cmp(exp.get(), sqrt2.get()), 0);
   EXPECT_LT(BN_cmp(exp.get(), rsa_p_.get()), 0);
   EXPECT_LT(BN_cmp(exp.get(), rsa_q_.get()), 0);
 }

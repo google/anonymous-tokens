@@ -31,6 +31,7 @@
 #include "anonymous_tokens/cpp/crypto/constants.h"
 #include "anonymous_tokens/cpp/shared/status_utils.h"
 #include <openssl/base.h>
+#include <openssl/bn.h>
 #include <openssl/bytestring.h>
 #include <openssl/digest.h>
 #include <openssl/err.h>
@@ -42,22 +43,6 @@
 namespace anonymous_tokens {
 
 namespace internal {
-
-// Approximation of sqrt(2) taken from
-// //depot/google3/third_party/openssl/boringssl/src/crypto/fipsmodule/rsa/rsa_impl.c;l=997
-constexpr uint32_t kBoringSSLRSASqrtTwo[] = {
-    0x4d7c60a5, 0xe633e3e1, 0x5fcf8f7b, 0xca3ea33b, 0xc246785e, 0x92957023,
-    0xf9acce41, 0x797f2805, 0xfdfe170f, 0xd3b1f780, 0xd24f4a76, 0x3facb882,
-    0x18838a2e, 0xaff5f3b2, 0xc1fcbdde, 0xa2f7dc33, 0xdea06241, 0xf7aa81c2,
-    0xf6a1be3f, 0xca221307, 0x332a5e9f, 0x7bda1ebf, 0x0104dc01, 0xfe32352f,
-    0xb8cf341b, 0x6f8236c7, 0x4264dabc, 0xd528b651, 0xf4d3a02c, 0xebc93e0c,
-    0x81394ab6, 0xd8fd0efd, 0xeaa4a089, 0x9040ca4a, 0xf52f120f, 0x836e582e,
-    0xcb2a6343, 0x31f3c84d, 0xc6d5a8a3, 0x8bb7e9dc, 0x460abc72, 0x2f7c4e33,
-    0xcab1bc91, 0x1688458a, 0x53059c60, 0x11bc337b, 0xd2202e87, 0x42af1f4e,
-    0x78048736, 0x3dfa2768, 0x0f74a85e, 0x439c7b4a, 0xa8b1fe6f, 0xdc83db39,
-    0x4afc8304, 0x3ab8a2c3, 0xed17ac85, 0x83339915, 0x1d6f60ba, 0x893ba84c,
-    0x597d89b3, 0x754abe9f, 0xb504f333, 0xf9de6484,
-};
 
 absl::StatusOr<bssl::UniquePtr<BIGNUM>> PublicMetadataHashWithHKDF(
     absl::string_view public_metadata, absl::string_view rsa_modulus_str,
@@ -192,64 +177,6 @@ std::string EncodeMessagePublicMetadata(absl::string_view message,
   // Finally append public metadata and then the message to the output.
   std::string encoding(buffer.begin(), buffer.end());
   return absl::StrCat(encoding, public_metadata, message);
-}
-
-absl::StatusOr<bssl::UniquePtr<BIGNUM>> GetRsaSqrtTwo(int x) {
-  // Compute hard-coded sqrt(2).
-  ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> sqrt2, NewBigNum());
-  const int sqrt2_size = sizeof(internal::kBoringSSLRSASqrtTwo) /
-                         sizeof(*internal::kBoringSSLRSASqrtTwo);
-  for (int i = sqrt2_size - 2; i >= 0; i = i - 2) {
-    // Add the uint32_t values as words directly and shift.
-    // 'i' is the "hi" value of a uint64_t, and 'i+1' is the "lo" value.
-    if (BN_add_word(sqrt2.get(), internal::kBoringSSLRSASqrtTwo[i]) != 1) {
-      return absl::InternalError(absl::StrCat(
-          "Cannot add word to compute RSA sqrt(2): ", GetSslErrors()));
-    }
-    if (BN_lshift(sqrt2.get(), sqrt2.get(), 32) != 1) {
-      return absl::InternalError(absl::StrCat(
-          "Cannot shift to compute RSA sqrt(2): ", GetSslErrors()));
-    }
-    if (BN_add_word(sqrt2.get(), internal::kBoringSSLRSASqrtTwo[i + 1]) != 1) {
-      return absl::InternalError(absl::StrCat(
-          "Cannot add word to compute RSA sqrt(2): ", GetSslErrors()));
-    }
-    if (i > 0) {
-      if (BN_lshift(sqrt2.get(), sqrt2.get(), 32) != 1) {
-        return absl::InternalError(absl::StrCat(
-            "Cannot shift to compute RSA sqrt(2): ", GetSslErrors()));
-      }
-    }
-  }
-
-  // Check that hard-coded result is correct length.
-  int sqrt2_bits = 32 * sqrt2_size;
-  if (BN_num_bits(sqrt2.get()) != static_cast<unsigned int>(sqrt2_bits)) {
-    return absl::InternalError("RSA sqrt(2) is not correct length.");
-  }
-
-  // Either shift left or right depending on value x.
-  if (sqrt2_bits > x) {
-    if (BN_rshift(sqrt2.get(), sqrt2.get(), sqrt2_bits - x) != 1) {
-      return absl::InternalError(
-          absl::StrCat("Cannot rshift to compute 2^(x-1/2): ", GetSslErrors()));
-    }
-  } else {
-    // Round up and be pessimistic about minimium factors.
-    if (BN_add_word(sqrt2.get(), 1) != 1 ||
-        BN_lshift(sqrt2.get(), sqrt2.get(), x - sqrt2_bits) != 1) {
-      return absl::InternalError(absl::StrCat(
-          "Cannot add/lshift to compute 2^(x-1/2): ", GetSslErrors()));
-    }
-  }
-
-  // Check that 2^(x - 1/2) is correct length.
-  if (BN_num_bits(sqrt2.get()) != static_cast<unsigned int>(x)) {
-    return absl::InternalError(
-        "2^(x-1/2) is not correct length after shifting.");
-  }
-
-  return std::move(sqrt2);
 }
 
 absl::StatusOr<bssl::UniquePtr<BIGNUM>> ComputePowerOfTwo(int x) {
@@ -415,7 +342,7 @@ absl::StatusOr<bssl::UniquePtr<BIGNUM>> ComputeExponentWithPublicMetadata(
   if (BN_clear_bit(exponent.get(), (prime_bytes * 8) - 1) != kBsslSuccess ||
       BN_clear_bit(exponent.get(), (prime_bytes * 8) - 2) != kBsslSuccess ||
       BN_set_bit(exponent.get(), 0) != kBsslSuccess) {
-    return absl::InvalidArgumentError(absl::StrCat(
+    return absl::InternalError(absl::StrCat(
         "Could not clear the two most significant bits and set the least "
         "significant bit to zero: ",
         GetSslErrors()));
@@ -615,6 +542,91 @@ absl::StatusOr<std::string> RsaSsaPssPublicKeyToDerEncoding(const RSA* rsa) {
   OPENSSL_free(rsa_ssa_pss_public_key_der);
   // Return the DER encoding as string.
   return rsa_ssa_pss_public_key_der_str;
+}
+
+// RSA public key structure source:
+// https://source.corp.google.com/piper///depot/google3/third_party/anonymous_tokens/cpp/crypto/crypto_utils.cc;l=521-551;bpv=0;bpt=1;rcl=787173326
+absl::StatusOr<bssl::UniquePtr<RSA>> RsaSsaPssPublicKeyFromDerEncoding(
+    const absl::string_view der_encoding) {
+  CBS cbs;
+  CBS_init(&cbs, reinterpret_cast<const uint8_t*>(der_encoding.data()),
+           der_encoding.size());
+
+  // Parse the outer SEQUENCE (outer_seq)
+  CBS outer_sequence;
+  if (!CBS_get_asn1(&cbs, &outer_sequence, CBS_ASN1_SEQUENCE)) {
+    return absl::InvalidArgumentError(
+        "Invalid SPKI token key encoding (failed reading outer sequence)");
+  }
+
+  // Parse the AlgorithmIdentifier SEQUENCE (inner_seq)
+  // This contains the OID for RSASSA-PSS and its parameters (param_seq)
+  // We are currently ignoring the PSS parameters within inner_seq
+  CBS inner_seq;
+  if (!CBS_get_asn1(&outer_sequence, &inner_seq, CBS_ASN1_SEQUENCE)) {
+    return absl::InvalidArgumentError(
+        "Invalid SPKI token key encoding (failed reading parameters)");
+  }
+
+  // Parse the public key BIT STRING (public_key_bit_str_cbb)
+  CBS publicKeyBitString;
+  if (!CBS_get_asn1(&outer_sequence, &publicKeyBitString, CBS_ASN1_BITSTRING)) {
+    return absl::InvalidArgumentError(
+        "Invalid SPKI token key encoding (failed reading public key bit "
+        "string)");
+  }
+
+  // The first byte of the BIT STRING is the number of unused bits, must be 0.
+  uint8_t padding_bits;
+  if (!CBS_get_u8(&publicKeyBitString, &padding_bits) || padding_bits != 0) {
+    return absl::InvalidArgumentError(
+        "Invalid SPKI token key encoding (invalid padding in public key bit "
+        "string)");
+  }
+
+  // The rest of the BIT STRING is the der_encoded_rsa_public_key_structure
+  // This is itself a SEQUENCE { INTEGER N, INTEGER E }
+  CBS rsaPublicKey;
+  if (!CBS_get_asn1(&publicKeyBitString, &rsaPublicKey, CBS_ASN1_SEQUENCE)) {
+    return absl::InvalidArgumentError("x509: invalid RSA public key");
+  }
+
+  // Parse Modulus (N) from the inner RSA public key structure
+  CBS modulus_cbs;
+  if (!CBS_get_asn1(&rsaPublicKey, &modulus_cbs, CBS_ASN1_INTEGER)) {
+    return absl::InvalidArgumentError("x509: invalid RSA modulus");
+  }
+  bssl::UniquePtr<BIGNUM> modulus(BN_new());
+  if (!modulus) {
+    return absl::InternalError("Failed to allocate BIGNUM for modulus");
+  }
+  if (!BN_bin2bn(CBS_data(&modulus_cbs), CBS_len(&modulus_cbs),
+                 modulus.get())) {
+    return absl::InvalidArgumentError("x509: invalid RSA modulus data");
+  }
+
+  // Parse public exponent (E) from the inner RSA public key structure
+  CBS public_exponent_cbs;
+  if (!CBS_get_asn1(&rsaPublicKey, &public_exponent_cbs, CBS_ASN1_INTEGER)) {
+    return absl::InvalidArgumentError("x509: invalid RSA public exponent");
+  }
+  bssl::UniquePtr<BIGNUM> publicExponent(BN_new());
+  if (!publicExponent) {
+    return absl::InternalError("Failed to allocate BIGNUM for public exponent");
+  }
+  if (!BN_bin2bn(CBS_data(&public_exponent_cbs), CBS_len(&public_exponent_cbs),
+                 publicExponent.get())) {
+    return absl::InvalidArgumentError("x509: invalid RSA public exponent data");
+  }
+
+  // Create RSA object
+  bssl::UniquePtr<RSA> rsa(
+      RSA_new_public_key(modulus.get(), publicExponent.get()));
+  if (!rsa) {
+    return absl::InternalError("Failed to create RSA object");
+  }
+
+  return rsa;
 }
 
 absl::StatusOr<bool> PrivacyPassTruncatedTokenKeyIdCollision(
