@@ -94,7 +94,7 @@ absl::StatusOr<std::pair<RSAPublicKey, RSAPrivateKey>> PopulateTestVectorKeys(
   private_key.set_q(q);
 
   // Computing CRT parameters
-  ANON_TOKENS_ASSIGN_OR_RETURN(BnCtxPtr bn_ctx, GetAndStartBigNumCtx());
+  ANON_TOKENS_ASSIGN_OR_RETURN(BnCtxPtr bn_ctx, GetBigNumCtx());
   ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> dp_bn, NewBigNum());
   ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> dq_bn, NewBigNum());
   ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> crt_bn, NewBigNum());

@@ -102,7 +102,7 @@ absl::StatusOr<std::string> TestSignWithPublicMetadata(
         absl::StrCat("Unable to compute phi(q): ", GetSslErrors()));
   }
   // Compute phi(n) = phi(p)*phi(q)
-  ANON_TOKENS_ASSIGN_OR_RETURN(auto ctx, GetAndStartBigNumCtx());
+  ANON_TOKENS_ASSIGN_OR_RETURN(auto ctx, GetBigNumCtx());
   ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> phi_n, NewBigNum());
   if (BN_mul(phi_n.get(), phi_p.get(), phi_q.get(), ctx.get()) != 1) {
     return absl::InternalError(

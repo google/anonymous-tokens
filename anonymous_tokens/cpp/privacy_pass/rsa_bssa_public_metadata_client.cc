@@ -33,7 +33,7 @@ namespace anonymous_tokens {
 namespace {
 
 absl::Status CheckKeySize(const RSA& key) {
-  if (uint size = RSA_size(&key);
+  if (unsigned int size = RSA_size(&key);
       size != kRsaModulusSizeInBytes256 && size != kRsaModulusSizeInBytes512) {
     return absl::InvalidArgumentError(
         "Token type DA7A must use RSA key with the modulus of size 256 or 512 "
@@ -47,7 +47,7 @@ absl::Status CheckKeySize(const RSA& key) {
 absl::StatusOr<std::unique_ptr<PrivacyPassRsaBssaPublicMetadataClient>>
 PrivacyPassRsaBssaPublicMetadataClient::Create(const RSA& rsa_public_key) {
   ANON_TOKENS_RETURN_IF_ERROR(CheckKeySize(rsa_public_key));
-  uint modulus_size = RSA_size(&rsa_public_key);
+  unsigned int modulus_size = RSA_size(&rsa_public_key);
 
   // Create modulus and public exponent strings.
   ANON_TOKENS_ASSIGN_OR_RETURN(

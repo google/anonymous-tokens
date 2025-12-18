@@ -102,14 +102,11 @@ absl::StatusOr<std::string> MarshalRsaPublicKey(const RSA* rsa) {
 
 }  // namespace
 
-absl::StatusOr<BnCtxPtr> GetAndStartBigNumCtx() {
-  // Create context to be used in intermediate computation.
+absl::StatusOr<BnCtxPtr> GetBigNumCtx() {
   BnCtxPtr bn_ctx = BnCtxPtr(BN_CTX_new());
   if (!bn_ctx.get()) {
     return absl::InternalError("Error generating bignum context.");
   }
-  BN_CTX_start(bn_ctx.get());
-
   return bn_ctx;
 }
 
@@ -361,7 +358,7 @@ ComputeExponentWithPublicMetadataAndPublicExponent(
   ANON_TOKENS_ASSIGN_OR_RETURN(
       bssl::UniquePtr<BIGNUM> md_exp,
       ComputeExponentWithPublicMetadata(n, public_metadata));
-  ANON_TOKENS_ASSIGN_OR_RETURN(BnCtxPtr bn_ctx, GetAndStartBigNumCtx());
+  ANON_TOKENS_ASSIGN_OR_RETURN(BnCtxPtr bn_ctx, GetBigNumCtx());
   // new_e=e*md_exp
   ANON_TOKENS_ASSIGN_OR_RETURN(bssl::UniquePtr<BIGNUM> new_e, NewBigNum());
   if (BN_mul(new_e.get(), md_exp.get(), &e, bn_ctx.get()) != kBsslSuccess) {

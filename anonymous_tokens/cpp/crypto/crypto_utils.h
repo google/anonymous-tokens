@@ -25,6 +25,7 @@
 #include "absl/strings/string_view.h"
 #include <openssl/base.h>
 #include <openssl/bn.h>
+#include "third_party/openssl/boringssl/src/include/openssl/digest.h"
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 
@@ -71,8 +72,8 @@ class EvpMdCtxDeleter {
 };
 typedef std::unique_ptr<EVP_MD_CTX, EvpMdCtxDeleter> EvpMdCtxPtr;
 
-// Creates and starts a BIGNUM context.
-absl::StatusOr<BnCtxPtr> GetAndStartBigNumCtx();
+// Creates a BIGNUM context.
+absl::StatusOr<BnCtxPtr> GetBigNumCtx();
 
 // Creates a new BIGNUM.
 absl::StatusOr<bssl::UniquePtr<BIGNUM> > NewBigNum();
