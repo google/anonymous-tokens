@@ -25,7 +25,7 @@
 #include "absl/strings/string_view.h"
 #include <openssl/base.h>
 #include <openssl/bn.h>
-#include "third_party/openssl/boringssl/src/include/openssl/digest.h"
+#include <openssl/digest.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 
