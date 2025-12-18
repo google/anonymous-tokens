@@ -38,9 +38,7 @@ struct IetfNewPublicExponentWithPublicMetadataTestVector {
 };
 
 TEST(AnonymousTokensCryptoUtilsTest, BignumToStringAndBack) {
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetAndStartBigNumCtx());
-
-  // Create a new BIGNUM using the context and set it
+  // Create a new BIGNUM and set it
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> bn_1, NewBigNum());
   ASSERT_EQ(BN_set_u64(bn_1.get(), 0x124435435), 1);
   EXPECT_NE(bn_1, nullptr);
@@ -82,7 +80,7 @@ TEST(AnonymousTokensCryptoUtilsTest, ComputeHashAcceptsNullStringView) {
 }
 
 TEST(AnonymousTokensCryptoUtilsTest, ComputeCarmichaelLcm) {
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetAndStartBigNumCtx());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetBigNumCtx());
 
   // Suppose that N = 1019 * 1187.
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> phi_p, NewBigNum());
@@ -153,7 +151,6 @@ INSTANTIATE_TEST_SUITE_P(ComputeHashTests, ComputeHashTest,
                          testing::ValuesIn(GetComputeHashTestParams()));
 
 TEST(PublicMetadataCryptoUtilsInternalTest, PublicMetadataHashWithHKDF) {
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetAndStartBigNumCtx());
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(bssl::UniquePtr<BIGNUM> max_value,
                                    NewBigNum());
   ASSERT_TRUE(BN_set_word(max_value.get(), 4294967295));
@@ -617,7 +614,7 @@ TEST_P(CryptoUtilsTest, FinalExponentCoprime) {
       bssl::UniquePtr<BIGNUM> final_exponent,
       ComputeExponentWithPublicMetadataAndPublicExponent(
           *rsa_modulus_.get(), *rsa_e_.get(), metadata));
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetAndStartBigNumCtx());
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(BnCtxPtr ctx, GetBigNumCtx());
 
   // Check that exponent is odd.
   EXPECT_EQ(BN_is_odd(final_exponent.get()), 1);
