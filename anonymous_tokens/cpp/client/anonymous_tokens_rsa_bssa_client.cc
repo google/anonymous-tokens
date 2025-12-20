@@ -277,7 +277,8 @@ absl::Status AnonymousTokensRsaBssaClient::Verify(
   // Validate the message mask.
   switch (public_key.message_mask_type()) {
     case AT_MESSAGE_MASK_CONCAT:
-      if (token.message_mask().length() != public_key.message_mask_size()) {
+      if (token.message_mask().length() !=
+          static_cast<size_t>(public_key.message_mask_size())) {
         return absl::InvalidArgumentError("Invalid message mask size.");
       }
       break;
