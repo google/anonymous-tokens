@@ -112,7 +112,12 @@ struct ServiceType {
   static constexpr ServiceTypeId kChromeIpBlinding = 0x01;
   static constexpr ServiceTypeId kCronetIpBlinding = 0x02;
   static constexpr ServiceTypeId kWebviewIpBlinding = 0x03;
+  // Android PrivateAratea uses blind tokens fetched based on device keystore
+  // attestation.
   static constexpr ServiceTypeId kPrivateAratea = 0x04;
+  // Chrome PrivateAratea uses blind tokens fetched based on Gaia IDs of users.
+  static constexpr ServiceTypeId kChromePrivateAratea = 0x05;
+  static constexpr ServiceTypeId kIosPrivateAratea = 0x06;
   ServiceTypeId service_type_id;
 
   // Derived in FromExtension from service_type_id.

@@ -395,6 +395,12 @@ absl::StatusOr<ServiceType> ServiceType::FromExtension(const Extension& ext) {
     case kPrivateAratea:
       st.service_type = "privatearatea";
       break;
+    case kChromePrivateAratea:
+      st.service_type = "chromeprivatearatea";
+      break;
+    case kIosPrivateAratea:
+      st.service_type = "iosprivatearatea";
+      break;
     default:
       return absl::InvalidArgumentError(
           "[ServiceType] unknown service_type_id");

@@ -550,6 +550,28 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, ArateaServiceTypeRoundTrip) {
   EXPECT_EQ(st2.service_type, "privatearatea");
 }
 
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     ChromePrivateArateaServiceTypeRoundTrip) {
+  ServiceType st{.service_type_id = ServiceType::kChromePrivateAratea};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, st.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF001);
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ServiceType st2,
+                                   ServiceType::FromExtension(ext));
+  EXPECT_EQ(st.service_type_id, st2.service_type_id);
+  EXPECT_EQ(st2.service_type, "chromeprivatearatea");
+}
+
+TEST(AnonymousTokensPrivacyPassTokenEncodingsTest,
+     IosPrivateArateaServiceTypeRoundTrip) {
+  ServiceType st{.service_type_id = ServiceType::kIosPrivateAratea};
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const Extension ext, st.AsExtension());
+  EXPECT_EQ(ext.extension_type, 0xF001);
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const ServiceType st2,
+                                   ServiceType::FromExtension(ext));
+  EXPECT_EQ(st.service_type_id, st2.service_type_id);
+  EXPECT_EQ(st2.service_type, "iosprivatearatea");
+}
+
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, WrongExtId) {
   ServiceType st{.service_type_id = ServiceType::kChromeIpBlinding};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, st.AsExtension());
@@ -558,7 +580,7 @@ TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, WrongExtId) {
 }
 
 TEST(AnonymousTokensPrivacyPassTokenEncodingsTest, WrongServiceTypeId) {
-  ServiceType st{.service_type_id = 0x05};
+  ServiceType st{.service_type_id = 0x07};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(Extension ext, st.AsExtension());
   EXPECT_EQ(ext.extension_type, 0xF001);
   EXPECT_FALSE(ServiceType::FromExtension(ext).ok());
