@@ -1,5 +1,7 @@
 # Enable Bzlmod for every Bazel command
 common --enable_bzlmod
+common --copt=-Wa,--gsframe=no
+common --host_copt=-Wa,--gsframe=no
 # Use JDK 21 for all Java builds as a dependency 'liblite_runtime_only.jar' in protobuf/java/core requires it.
 build --java_language_version=21
 build --tool_java_language_version=21
