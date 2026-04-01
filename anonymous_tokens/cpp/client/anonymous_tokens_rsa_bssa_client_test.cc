@@ -549,7 +549,7 @@ TEST_F(AnonymousTokensRsaBssaClientWithPublicMetadataTest,
   // corrupt the tokens
   for (auto& token : tokens) {
     std::string token_bytes = token.token().token();
-    token_bytes[50] = 'a';
+    token_bytes[50] ^= 0xFF;
     token.mutable_token()->set_token(token_bytes);
   }
   RunVerifier(tokens, public_key_, /*expected_verification_success=*/false);
