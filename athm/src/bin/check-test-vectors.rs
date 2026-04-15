@@ -2,7 +2,6 @@ use athm::{
     Decodable, Encodable, Params, PrivateKey, PublicKey, PublicKeyProof, Token, TokenContext,
     TokenRequest, TokenResponse,
 };
-use p256::ProjectivePoint;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -41,14 +40,14 @@ fn main() {
     let deployment_id = params_tv.output.get("deployment_id").unwrap();
     let n_buckets = params_tv.output.get("n_buckets").unwrap().parse::<u8>().unwrap();
     let params = Params::new(n_buckets, deployment_id.clone().into_bytes()).unwrap();
-    assert_eq!(
-        params.big_g,
-        ProjectivePoint::from_hex(params_tv.output.get("generator_g").unwrap()).unwrap()
-    );
-    assert_eq!(
-        params.big_h,
-        ProjectivePoint::from_hex(params_tv.output.get("generator_h").unwrap()).unwrap()
-    );
+    // Compare generators by their encoded bytes, since the concrete point type
+    // depends on the active backend (rustcrypto vs boringssl).
+    let mut big_g_bytes = vec![];
+    params.big_g.encode(&mut big_g_bytes);
+    assert_eq!(big_g_bytes, hex::decode(params_tv.output.get("generator_g").unwrap()).unwrap());
+    let mut big_h_bytes = vec![];
+    params.big_h.encode(&mut big_h_bytes);
+    assert_eq!(big_h_bytes, hex::decode(params_tv.output.get("generator_h").unwrap()).unwrap());
     println!("params: OK");
 
     // Check all remaining test vectors.
