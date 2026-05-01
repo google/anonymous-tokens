@@ -1149,7 +1149,6 @@ mod tests {
     use super::*;
     const TEST_DEPLOYMENT_ID: &[u8] = b"test_deployment_id";
 
-
     fn gen_test_params() -> Params {
         Params::new(DEFAULT_N_BUCKETS, TEST_DEPLOYMENT_ID.into()).unwrap()
     }
