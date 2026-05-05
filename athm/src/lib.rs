@@ -59,19 +59,11 @@
 //! 4. Client unblinds with [`finalize_token`]
 //! 5. Server verifies with [`verify_token`]
 
-use elliptic_curve::generic_array::typenum::Unsigned;
-use elliptic_curve::hash2curve::{ExpandMsgXmd, GroupDigest};
-use p256::{
-    elliptic_curve::{
-        group::GroupEncoding,
-        sec1::ModulusSize,
-        subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption},
-        Field, FieldBytes, FieldBytesSize, Group, PrimeField,
-    },
-    NistP256, NonZeroScalar, ProjectivePoint, Scalar,
-};
+mod backend;
+
+use backend::rustcrypto::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption, Group};
+use backend::{Point as ProjectivePoint, Scalar};
 use rand_core::CryptoRngCore;
-use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A transcript for Fiat-Shamir transform
@@ -94,16 +86,18 @@ impl Transcript {
 
     /// Add a scalar to the transcript
     fn append_scalar(&mut self, scalar: &Scalar) {
-        let encoded = scalar.to_bytes();
+        let mut encoded = Vec::new();
+        backend::rustcrypto::encode_scalar(scalar, &mut encoded);
         self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
-        self.messages.push(scalar.to_bytes().to_vec());
+        self.messages.push(encoded);
     }
 
     /// Add a point to the transcript
     fn append_point(&mut self, point: &ProjectivePoint) {
-        let encoded = point.to_bytes();
+        let mut encoded = Vec::new();
+        backend::rustcrypto::encode_point(point, &mut encoded);
         self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
-        self.messages.push(encoded.to_vec());
+        self.messages.push(encoded);
     }
 
     /// Generate a challenge scalar with domain separation
@@ -111,11 +105,7 @@ impl Transcript {
         let msgs = &self.messages.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>();
         let dsts = &[b"HashToScalar-".as_slice(), &self.context_string, info];
 
-        // Safety (see docs for ExpandMsgXmd)
-        // - destination is not empty
-        // - input is not empty and is less than or equal to u16::MAX bytes
-        // - input is not greater than 255 * 32
-        NistP256::hash_to_scalar::<ExpandMsgXmd<Sha256>>(msgs, dsts).unwrap()
+        backend::rustcrypto::hash_to_scalar(msgs, dsts).unwrap()
     }
 }
 
@@ -127,14 +117,14 @@ impl Transcript {
 #[cfg(test)]
 const DEFAULT_N_BUCKETS: u8 = 4;
 
-const SCALAR_SIZE: usize = FieldBytesSize::<NistP256>::USIZE;
-const POINT_SIZE: usize = <FieldBytesSize<NistP256> as ModulusSize>::CompressedPointSize::USIZE;
+const SCALAR_SIZE: usize = backend::rustcrypto::SCALAR_SIZE;
+const POINT_SIZE: usize = backend::rustcrypto::POINT_SIZE;
 const DECODING_ERROR: &'static str = "decoding failed";
 const INPUT_TOO_SHORT: &'static str = "input is too short";
 
 // Helper to encode a Scalar and append it to a byte vector.
 fn encode_scalar(scalar: &Scalar, out: &mut Vec<u8>) {
-    out.extend_from_slice(scalar.to_bytes().as_ref());
+    backend::rustcrypto::encode_scalar(scalar, out);
 }
 
 // Trait for anything that can be encoded into a byte vector.
@@ -152,10 +142,7 @@ pub trait Decodable {
 // Helper to decode a Scalar from a byte slice. Returns a CtOption of the resulting scalar if successful, and a new slice of the remaining input.
 // Panics if the input is too small.
 fn decode_scalar<'a>(input: &'a [u8]) -> (CtOption<Scalar>, &'a [u8]) {
-    (
-        Scalar::from_repr(*FieldBytes::<NistP256>::from_slice(&input[..SCALAR_SIZE])),
-        &input[SCALAR_SIZE..],
-    )
+    backend::rustcrypto::decode_scalar(input)
 }
 
 impl Encodable for Scalar {
@@ -179,13 +166,13 @@ impl Decodable for Scalar {
 
 // Helper to encode a ProjectivePoint and append it to a byte vector.
 fn encode_point(point: &ProjectivePoint, out: &mut Vec<u8>) {
-    out.extend_from_slice(point.to_bytes().as_ref());
+    backend::rustcrypto::encode_point(point, out);
 }
 
 // Helper to decode a ProjectivePoint from a byte slice. Returns a CtOption of the resulting point if successful, and a new slice of the remaining input.
 // Panics if the input is too small.
 fn decode_point<'a>(input: &'a [u8]) -> (CtOption<ProjectivePoint>, &'a [u8]) {
-    (ProjectivePoint::from_bytes((&input[..POINT_SIZE]).into()), &input[POINT_SIZE..])
+    backend::rustcrypto::decode_point(input)
 }
 
 impl Encodable for ProjectivePoint {
@@ -694,31 +681,28 @@ impl Decodable for Params {
 
 /// Get the generator G for the P256 curve
 fn generator_g() -> ProjectivePoint {
-    ProjectivePoint::GENERATOR
+    backend::rustcrypto::point_generator()
 }
 
 /// Get the generator H by hashing generator G
 fn generator_h(context_string: &[u8]) -> ProjectivePoint {
-    let g_bytes = generator_g().to_bytes();
+    let mut g_bytes = Vec::new();
+    backend::rustcrypto::encode_point(&generator_g(), &mut g_bytes);
 
     // Use hash-to-curve to derive H from G
     let msg_array: &[&[u8]] = &[&g_bytes];
     let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"generatorH"];
-    // Safety (see docs for ExpandMsgXmd)
-    // - destination is not empty
-    // - input is not empty and is less than or equal to u16::MAX bytes
-    // - input is not greater than 255 * 32
-    NistP256::hash_from_bytes::<ExpandMsgXmd<Sha256>>(msg_array, dst_array).unwrap()
+    backend::rustcrypto::hash_to_point(msg_array, dst_array).unwrap()
 }
 
 /// Generate a random scalar
 fn random_scalar<R: CryptoRngCore>(rng: &mut R) -> Scalar {
-    Scalar::random(rng)
+    backend::rustcrypto::random_scalar(rng)
 }
 
 /// Generate a random non-zero scalar
 fn random_non_zero_scalar<R: CryptoRngCore>(rng: &mut R) -> Scalar {
-    *NonZeroScalar::random(rng).as_ref()
+    backend::rustcrypto::random_non_zero_scalar(rng)
 }
 
 /// Create a proof of knowledge for the public key
@@ -1147,6 +1131,7 @@ pub fn verify_token(private_key: &PrivateKey, token: &Token, params: &Params) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use backend::rustcrypto::Field;
     const TEST_DEPLOYMENT_ID: &[u8] = b"test_deployment_id";
 
     fn gen_test_params() -> Params {
