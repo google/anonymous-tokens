@@ -28,9 +28,10 @@ pub mod rustcrypto;
 pub mod boringssl;
 
 // Re-export the active backend's types and functions for use in the rest of the crate.
-// Exactly one of these features must be enabled.
+// When both features are enabled (for cross-backend testing), boringssl is used as
+// the primary backend.
 
-#[cfg(feature = "rustcrypto")]
+#[cfg(all(feature = "rustcrypto", not(feature = "boringssl")))]
 pub use rustcrypto::{
     decode_point, decode_scalar, encode_point, encode_scalar, hash_to_point, hash_to_scalar,
     point_generator, random_non_zero_scalar, random_scalar, Field, Group, GroupEncoding,
@@ -43,3 +44,6 @@ pub use boringssl::{
     point_generator, random_non_zero_scalar, random_scalar, BsslPoint as Point,
     BsslScalar as Scalar, POINT_SIZE, SCALAR_SIZE,
 };
+
+#[cfg(all(test, feature = "rustcrypto", feature = "boringssl"))]
+mod cross_backend_test;

@@ -61,7 +61,7 @@
 
 mod backend;
 
-#[cfg(feature = "rustcrypto")]
+#[cfg(all(feature = "rustcrypto", not(feature = "boringssl")))]
 use backend::Group;
 use backend::{Point as ProjectivePoint, Scalar};
 use rand_core::CryptoRngCore;
@@ -1133,7 +1133,7 @@ pub fn verify_token(private_key: &PrivateKey, token: &Token, params: &Params) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "rustcrypto")]
+    #[cfg(all(feature = "rustcrypto", not(feature = "boringssl")))]
     use backend::{Field, Group};
     const TEST_DEPLOYMENT_ID: &[u8] = b"test_deployment_id";
 
