@@ -61,9 +61,11 @@
 
 mod backend;
 
-use backend::rustcrypto::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption, Group};
+#[cfg(feature = "rustcrypto")]
+use backend::Group;
 use backend::{Point as ProjectivePoint, Scalar};
 use rand_core::CryptoRngCore;
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A transcript for Fiat-Shamir transform
@@ -87,7 +89,7 @@ impl Transcript {
     /// Add a scalar to the transcript
     fn append_scalar(&mut self, scalar: &Scalar) {
         let mut encoded = Vec::new();
-        backend::rustcrypto::encode_scalar(scalar, &mut encoded);
+        backend::encode_scalar(scalar, &mut encoded);
         self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
         self.messages.push(encoded);
     }
@@ -95,7 +97,7 @@ impl Transcript {
     /// Add a point to the transcript
     fn append_point(&mut self, point: &ProjectivePoint) {
         let mut encoded = Vec::new();
-        backend::rustcrypto::encode_point(point, &mut encoded);
+        backend::encode_point(point, &mut encoded);
         self.messages.push((encoded.len() as u16).to_be_bytes().to_vec());
         self.messages.push(encoded);
     }
@@ -105,7 +107,7 @@ impl Transcript {
         let msgs = &self.messages.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>();
         let dsts = &[b"HashToScalar-".as_slice(), &self.context_string, info];
 
-        backend::rustcrypto::hash_to_scalar(msgs, dsts).unwrap()
+        backend::hash_to_scalar(msgs, dsts).unwrap()
     }
 }
 
@@ -117,14 +119,14 @@ impl Transcript {
 #[cfg(test)]
 const DEFAULT_N_BUCKETS: u8 = 4;
 
-const SCALAR_SIZE: usize = backend::rustcrypto::SCALAR_SIZE;
-const POINT_SIZE: usize = backend::rustcrypto::POINT_SIZE;
+const SCALAR_SIZE: usize = backend::SCALAR_SIZE;
+const POINT_SIZE: usize = backend::POINT_SIZE;
 const DECODING_ERROR: &'static str = "decoding failed";
 const INPUT_TOO_SHORT: &'static str = "input is too short";
 
 // Helper to encode a Scalar and append it to a byte vector.
 fn encode_scalar(scalar: &Scalar, out: &mut Vec<u8>) {
-    backend::rustcrypto::encode_scalar(scalar, out);
+    backend::encode_scalar(scalar, out);
 }
 
 // Trait for anything that can be encoded into a byte vector.
@@ -142,7 +144,7 @@ pub trait Decodable {
 // Helper to decode a Scalar from a byte slice. Returns a CtOption of the resulting scalar if successful, and a new slice of the remaining input.
 // Panics if the input is too small.
 fn decode_scalar<'a>(input: &'a [u8]) -> (CtOption<Scalar>, &'a [u8]) {
-    backend::rustcrypto::decode_scalar(input)
+    backend::decode_scalar(input)
 }
 
 impl Encodable for Scalar {
@@ -166,13 +168,13 @@ impl Decodable for Scalar {
 
 // Helper to encode a ProjectivePoint and append it to a byte vector.
 fn encode_point(point: &ProjectivePoint, out: &mut Vec<u8>) {
-    backend::rustcrypto::encode_point(point, out);
+    backend::encode_point(point, out);
 }
 
 // Helper to decode a ProjectivePoint from a byte slice. Returns a CtOption of the resulting point if successful, and a new slice of the remaining input.
 // Panics if the input is too small.
 fn decode_point<'a>(input: &'a [u8]) -> (CtOption<ProjectivePoint>, &'a [u8]) {
-    backend::rustcrypto::decode_point(input)
+    backend::decode_point(input)
 }
 
 impl Encodable for ProjectivePoint {
@@ -681,28 +683,28 @@ impl Decodable for Params {
 
 /// Get the generator G for the P256 curve
 fn generator_g() -> ProjectivePoint {
-    backend::rustcrypto::point_generator()
+    backend::point_generator()
 }
 
 /// Get the generator H by hashing generator G
 fn generator_h(context_string: &[u8]) -> ProjectivePoint {
     let mut g_bytes = Vec::new();
-    backend::rustcrypto::encode_point(&generator_g(), &mut g_bytes);
+    backend::encode_point(&generator_g(), &mut g_bytes);
 
     // Use hash-to-curve to derive H from G
     let msg_array: &[&[u8]] = &[&g_bytes];
     let dst_array: &[&[u8]] = &[b"HashToGroup-", context_string, b"generatorH"];
-    backend::rustcrypto::hash_to_point(msg_array, dst_array).unwrap()
+    backend::hash_to_point(msg_array, dst_array).unwrap()
 }
 
 /// Generate a random scalar
 fn random_scalar<R: CryptoRngCore>(rng: &mut R) -> Scalar {
-    backend::rustcrypto::random_scalar(rng)
+    backend::random_scalar(rng)
 }
 
 /// Generate a random non-zero scalar
 fn random_non_zero_scalar<R: CryptoRngCore>(rng: &mut R) -> Scalar {
-    backend::rustcrypto::random_non_zero_scalar(rng)
+    backend::random_non_zero_scalar(rng)
 }
 
 /// Create a proof of knowledge for the public key
@@ -1131,7 +1133,8 @@ pub fn verify_token(private_key: &PrivateKey, token: &Token, params: &Params) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use backend::rustcrypto::Field;
+    #[cfg(feature = "rustcrypto")]
+    use backend::{Field, Group};
     const TEST_DEPLOYMENT_ID: &[u8] = b"test_deployment_id";
 
     fn gen_test_params() -> Params {
@@ -1547,11 +1550,11 @@ mod tests {
 
         // Test 4: Using generator as P or Q
         let mut tampered = token.clone();
-        tampered.big_p = ProjectivePoint::GENERATOR;
+        tampered.big_p = generator_g();
         assert!(bool::from(verify_token(&server_private_key, &tampered, &params).is_none()));
 
         let mut tampered = token.clone();
-        tampered.big_q = ProjectivePoint::GENERATOR;
+        tampered.big_q = generator_g();
         assert!(bool::from(verify_token(&server_private_key, &tampered, &params).is_none()));
 
         // Test 5: All components tampered
@@ -1655,8 +1658,8 @@ mod tests {
         let random_scalar = Scalar::random(&mut rng);
         let forged = Token {
             t: random_scalar,
-            big_p: ProjectivePoint::GENERATOR * random_scalar,
-            big_q: ProjectivePoint::GENERATOR * (random_scalar + Scalar::ONE),
+            big_p: generator_g() * random_scalar,
+            big_q: generator_g() * (random_scalar + Scalar::ONE),
         };
         assert!(bool::from(verify_token(&server_private_key, &forged, &params).is_none()));
 
@@ -1671,7 +1674,7 @@ mod tests {
         // Attempt 4: Try to construct token that might pass for metadata 0
         // Q should equal x * P for metadata 0, but without proper blinding
         let fake_c = Scalar::random(&mut rng);
-        let fake_p = ProjectivePoint::GENERATOR * fake_c;
+        let fake_p = generator_g() * fake_c;
         let fake_t = Scalar::random(&mut rng);
         let fake_q = fake_p * server_private_key.x; // This won't work without proper protocol
         let forged = Token { t: fake_t, big_p: fake_p, big_q: fake_q };

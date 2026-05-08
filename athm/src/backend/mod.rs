@@ -24,10 +24,22 @@
 #[cfg(feature = "rustcrypto")]
 pub mod rustcrypto;
 
-// Re-export the active backend's types for use in the rest of the crate.
+#[cfg(feature = "boringssl")]
+pub mod boringssl;
+
+// Re-export the active backend's types and functions for use in the rest of the crate.
 // Exactly one of these features must be enabled.
 
 #[cfg(feature = "rustcrypto")]
-pub use rustcrypto::RustCryptoPoint as Point;
-#[cfg(feature = "rustcrypto")]
-pub use rustcrypto::RustCryptoScalar as Scalar;
+pub use rustcrypto::{
+    decode_point, decode_scalar, encode_point, encode_scalar, hash_to_point, hash_to_scalar,
+    point_generator, random_non_zero_scalar, random_scalar, Field, Group, GroupEncoding,
+    RustCryptoPoint as Point, RustCryptoScalar as Scalar, POINT_SIZE, SCALAR_SIZE,
+};
+
+#[cfg(feature = "boringssl")]
+pub use boringssl::{
+    decode_point, decode_scalar, encode_point, encode_scalar, hash_to_point, hash_to_scalar,
+    point_generator, random_non_zero_scalar, random_scalar, BsslPoint as Point,
+    BsslScalar as Scalar, POINT_SIZE, SCALAR_SIZE,
+};
