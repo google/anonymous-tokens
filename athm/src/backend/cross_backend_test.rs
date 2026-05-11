@@ -23,34 +23,35 @@
 
 #[cfg(all(feature = "rustcrypto", feature = "boringssl"))]
 mod cross_backend_tests {
-    use crate::backend::boringssl;
-    use crate::backend::rustcrypto;
+    use crate::backend::boringssl::BoringSslBackend;
+    use crate::backend::rustcrypto::RustCryptoBackend;
+    use crate::backend::AthmBackend;
 
     // -----------------------------------------------------------------------
     // Helper: compare serialized outputs from both backends
     // -----------------------------------------------------------------------
 
-    fn rustcrypto_point_bytes(p: &rustcrypto::RustCryptoPoint) -> Vec<u8> {
+    fn rc_point_bytes(p: &<RustCryptoBackend as AthmBackend>::Point) -> Vec<u8> {
         let mut out = Vec::new();
-        rustcrypto::encode_point(p, &mut out);
+        RustCryptoBackend::encode_point(p, &mut out);
         out
     }
 
-    fn boringssl_point_bytes(p: &boringssl::BsslPoint) -> Vec<u8> {
+    fn bssl_point_bytes(p: &<BoringSslBackend as AthmBackend>::Point) -> Vec<u8> {
         let mut out = Vec::new();
-        boringssl::encode_point(p, &mut out);
+        BoringSslBackend::encode_point(p, &mut out);
         out
     }
 
-    fn rustcrypto_scalar_bytes(s: &rustcrypto::RustCryptoScalar) -> Vec<u8> {
+    fn rc_scalar_bytes(s: &<RustCryptoBackend as AthmBackend>::Scalar) -> Vec<u8> {
         let mut out = Vec::new();
-        rustcrypto::encode_scalar(s, &mut out);
+        RustCryptoBackend::encode_scalar(s, &mut out);
         out
     }
 
-    fn boringssl_scalar_bytes(s: &boringssl::BsslScalar) -> Vec<u8> {
+    fn bssl_scalar_bytes(s: &<BoringSslBackend as AthmBackend>::Scalar) -> Vec<u8> {
         let mut out = Vec::new();
-        boringssl::encode_scalar(s, &mut out);
+        BoringSslBackend::encode_scalar(s, &mut out);
         out
     }
 
@@ -60,7 +61,6 @@ mod cross_backend_tests {
 
     #[test]
     fn test_hash_to_point_parity() {
-        // Various message/DST combinations
         let test_cases: Vec<(&[&[u8]], &[&[u8]])> = vec![
             (&[b"test"], &[b"DST"]),
             (&[b"hello world"], &[b"MyDST"]),
@@ -70,13 +70,13 @@ mod cross_backend_tests {
         ];
 
         for (msgs, dsts) in &test_cases {
-            let rc_point =
-                rustcrypto::hash_to_point(msgs, dsts).expect("rustcrypto hash_to_point failed");
-            let bssl_point =
-                boringssl::hash_to_point(msgs, dsts).expect("boringssl hash_to_point failed");
+            let rc_point = RustCryptoBackend::hash_to_point(msgs, dsts)
+                .expect("rustcrypto hash_to_point failed");
+            let bssl_point = BoringSslBackend::hash_to_point(msgs, dsts)
+                .expect("boringssl hash_to_point failed");
 
-            let rc_bytes = rustcrypto_point_bytes(&rc_point);
-            let bssl_bytes = boringssl_point_bytes(&bssl_point);
+            let rc_bytes = rc_point_bytes(&rc_point);
+            let bssl_bytes = bssl_point_bytes(&bssl_point);
 
             assert_eq!(
                 rc_bytes, bssl_bytes,
@@ -88,19 +88,18 @@ mod cross_backend_tests {
 
     #[test]
     fn test_hash_to_point_with_athm_style_dsts() {
-        // Test with the same DST format used in the actual ATHM protocol
         let context_string = b"ATHMV1-P256-4-test_deployment_id";
         let msgs: &[&[u8]] = &[b"some_point_data"];
         let dsts: &[&[u8]] = &[b"HashToGroup-", context_string.as_slice(), b"generatorH"];
 
         let rc_point =
-            rustcrypto::hash_to_point(msgs, dsts).expect("rustcrypto hash_to_point failed");
+            RustCryptoBackend::hash_to_point(msgs, dsts).expect("rustcrypto hash_to_point failed");
         let bssl_point =
-            boringssl::hash_to_point(msgs, dsts).expect("boringssl hash_to_point failed");
+            BoringSslBackend::hash_to_point(msgs, dsts).expect("boringssl hash_to_point failed");
 
         assert_eq!(
-            rustcrypto_point_bytes(&rc_point),
-            boringssl_point_bytes(&bssl_point),
+            rc_point_bytes(&rc_point),
+            bssl_point_bytes(&bssl_point),
             "hash_to_point mismatch with ATHM-style DSTs"
         );
     }
@@ -120,13 +119,13 @@ mod cross_backend_tests {
         ];
 
         for (msgs, dsts) in &test_cases {
-            let rc_scalar =
-                rustcrypto::hash_to_scalar(msgs, dsts).expect("rustcrypto hash_to_scalar failed");
-            let bssl_scalar =
-                boringssl::hash_to_scalar(msgs, dsts).expect("boringssl hash_to_scalar failed");
+            let rc_scalar = RustCryptoBackend::hash_to_scalar(msgs, dsts)
+                .expect("rustcrypto hash_to_scalar failed");
+            let bssl_scalar = BoringSslBackend::hash_to_scalar(msgs, dsts)
+                .expect("boringssl hash_to_scalar failed");
 
-            let rc_bytes = rustcrypto_scalar_bytes(&rc_scalar);
-            let bssl_bytes = boringssl_scalar_bytes(&bssl_scalar);
+            let rc_bytes = rc_scalar_bytes(&rc_scalar);
+            let bssl_bytes = bssl_scalar_bytes(&bssl_scalar);
 
             assert_eq!(
                 rc_bytes, bssl_bytes,
@@ -138,10 +137,7 @@ mod cross_backend_tests {
 
     #[test]
     fn test_hash_to_scalar_with_athm_style_dsts() {
-        // Test with DST formats matching the ATHM Transcript::challenge method
         let context_string = b"ATHMV1-P256-4-test_deployment_id";
-
-        // Simulate a challenge hash similar to what the protocol does
         let scalar_bytes = [0u8; 32];
         let point_bytes = [0u8; 33];
         let len_bytes = (32u16).to_be_bytes();
@@ -150,14 +146,14 @@ mod cross_backend_tests {
         let msgs: &[&[u8]] = &[&len_bytes, &scalar_bytes, &len_bytes2, &point_bytes];
         let dsts: &[&[u8]] = &[b"HashToScalar-", context_string.as_slice(), b"KeyCommitments"];
 
-        let rc_scalar =
-            rustcrypto::hash_to_scalar(msgs, dsts).expect("rustcrypto hash_to_scalar failed");
+        let rc_scalar = RustCryptoBackend::hash_to_scalar(msgs, dsts)
+            .expect("rustcrypto hash_to_scalar failed");
         let bssl_scalar =
-            boringssl::hash_to_scalar(msgs, dsts).expect("boringssl hash_to_scalar failed");
+            BoringSslBackend::hash_to_scalar(msgs, dsts).expect("boringssl hash_to_scalar failed");
 
         assert_eq!(
-            rustcrypto_scalar_bytes(&rc_scalar),
-            boringssl_scalar_bytes(&bssl_scalar),
+            rc_scalar_bytes(&rc_scalar),
+            bssl_scalar_bytes(&bssl_scalar),
             "hash_to_scalar mismatch with ATHM-style DSTs"
         );
     }
@@ -168,12 +164,12 @@ mod cross_backend_tests {
 
     #[test]
     fn test_generator_parity() {
-        let rc_gen = rustcrypto::point_generator();
-        let bssl_gen = boringssl::point_generator();
+        let rc_gen = RustCryptoBackend::point_generator();
+        let bssl_gen = BoringSslBackend::point_generator();
 
         assert_eq!(
-            rustcrypto_point_bytes(&rc_gen),
-            boringssl_point_bytes(&bssl_gen),
+            rc_point_bytes(&rc_gen),
+            bssl_point_bytes(&bssl_gen),
             "Generator points differ between backends"
         );
     }
@@ -184,35 +180,33 @@ mod cross_backend_tests {
 
     #[test]
     fn test_scalar_cross_encode_decode() {
-        // Encode with rustcrypto, decode with boringssl
         let test_values: Vec<u64> = vec![0, 1, 42, 256, 65535, u64::MAX];
 
         for v in &test_values {
-            let rc_scalar = rustcrypto::RustCryptoScalar::from(*v);
-            let rc_bytes = rustcrypto_scalar_bytes(&rc_scalar);
+            let rc_scalar = <RustCryptoBackend as AthmBackend>::Scalar::from(*v);
+            let rc_bytes = rc_scalar_bytes(&rc_scalar);
 
-            let (bssl_decoded, _) = boringssl::decode_scalar(&rc_bytes);
+            let (bssl_decoded, _) = BoringSslBackend::decode_scalar(&rc_bytes);
             assert!(
                 bool::from(bssl_decoded.is_some()),
                 "boringssl failed to decode rustcrypto scalar for value {}",
                 v
             );
-            let bssl_bytes = boringssl_scalar_bytes(&bssl_decoded.unwrap());
+            let bssl_bytes = bssl_scalar_bytes(&bssl_decoded.unwrap());
             assert_eq!(rc_bytes, bssl_bytes, "Scalar round-trip mismatch for value {}", v);
         }
 
-        // Encode with boringssl, decode with rustcrypto
         for v in &test_values {
-            let bssl_scalar = boringssl::BsslScalar::from(*v);
-            let bssl_bytes = boringssl_scalar_bytes(&bssl_scalar);
+            let bssl_scalar = <BoringSslBackend as AthmBackend>::Scalar::from(*v);
+            let bssl_bytes = bssl_scalar_bytes(&bssl_scalar);
 
-            let (rc_decoded, _) = rustcrypto::decode_scalar(&bssl_bytes);
+            let (rc_decoded, _) = RustCryptoBackend::decode_scalar(&bssl_bytes);
             assert!(
                 bool::from(rc_decoded.is_some()),
                 "rustcrypto failed to decode boringssl scalar for value {}",
                 v
             );
-            let rc_bytes = rustcrypto_scalar_bytes(&rc_decoded.unwrap());
+            let rc_bytes = rc_scalar_bytes(&rc_decoded.unwrap());
             assert_eq!(bssl_bytes, rc_bytes, "Scalar round-trip mismatch for value {}", v);
         }
     }
@@ -223,64 +217,58 @@ mod cross_backend_tests {
 
     #[test]
     fn test_point_cross_encode_decode() {
-        // Encode generator with rustcrypto, decode with boringssl
-        let rc_gen = rustcrypto::point_generator();
-        let rc_bytes = rustcrypto_point_bytes(&rc_gen);
+        let rc_gen = RustCryptoBackend::point_generator();
+        let rc_bytes = rc_point_bytes(&rc_gen);
 
-        let (bssl_decoded, _) =
-            boringssl::decode_point(rc_bytes.as_slice().try_into().unwrap_or(&rc_bytes));
+        let (bssl_decoded, _) = BoringSslBackend::decode_point(&rc_bytes);
         assert!(
             bool::from(bssl_decoded.is_some()),
             "boringssl failed to decode rustcrypto generator"
         );
-        let bssl_bytes = boringssl_point_bytes(&bssl_decoded.unwrap());
+        let bssl_bytes = bssl_point_bytes(&bssl_decoded.unwrap());
         assert_eq!(rc_bytes, bssl_bytes, "Generator cross-decode mismatch");
 
-        // Encode generator with boringssl, decode with rustcrypto
-        let bssl_gen = boringssl::point_generator();
-        let bssl_bytes = boringssl_point_bytes(&bssl_gen);
+        let bssl_gen = BoringSslBackend::point_generator();
+        let bssl_bytes = bssl_point_bytes(&bssl_gen);
 
-        let (rc_decoded, _) = rustcrypto::decode_point(&bssl_bytes);
+        let (rc_decoded, _) = RustCryptoBackend::decode_point(&bssl_bytes);
         assert!(
             bool::from(rc_decoded.is_some()),
             "rustcrypto failed to decode boringssl generator"
         );
-        let rc_bytes2 = rustcrypto_point_bytes(&rc_decoded.unwrap());
+        let rc_bytes2 = rc_point_bytes(&rc_decoded.unwrap());
         assert_eq!(bssl_bytes, rc_bytes2, "Generator cross-decode mismatch (bssl->rc)");
     }
 
     #[test]
     fn test_identity_point_cross_encode_decode() {
-        // RustCrypto identity
-        let rc_identity = rustcrypto::RustCryptoPoint::default();
-        let rc_bytes = rustcrypto_point_bytes(&rc_identity);
+        let rc_identity = RustCryptoBackend::point_identity();
+        let rc_bytes = rc_point_bytes(&rc_identity);
 
-        // BoringSSL identity
-        let bssl_identity = boringssl::BsslPoint::IDENTITY;
-        let bssl_bytes = boringssl_point_bytes(&bssl_identity);
+        let bssl_identity = BoringSslBackend::point_identity();
+        let bssl_bytes = bssl_point_bytes(&bssl_identity);
 
         assert_eq!(rc_bytes, bssl_bytes, "Identity point encoding differs between backends");
     }
 
     #[test]
     fn test_hash_to_point_cross_decode() {
-        // Hash to a point with rustcrypto, decode it with boringssl, and vice versa
         let msgs: &[&[u8]] = &[b"cross_decode_test"];
         let dsts: &[&[u8]] = &[b"TestDST"];
 
-        let rc_point = rustcrypto::hash_to_point(msgs, dsts).unwrap();
-        let rc_bytes = rustcrypto_point_bytes(&rc_point);
+        let rc_point = RustCryptoBackend::hash_to_point(msgs, dsts).unwrap();
+        let rc_bytes = rc_point_bytes(&rc_point);
 
-        let (bssl_decoded, _) = boringssl::decode_point(&rc_bytes);
+        let (bssl_decoded, _) = BoringSslBackend::decode_point(&rc_bytes);
         assert!(bool::from(bssl_decoded.is_some()));
-        assert_eq!(rc_bytes, boringssl_point_bytes(&bssl_decoded.unwrap()));
+        assert_eq!(rc_bytes, bssl_point_bytes(&bssl_decoded.unwrap()));
 
-        let bssl_point = boringssl::hash_to_point(msgs, dsts).unwrap();
-        let bssl_bytes = boringssl_point_bytes(&bssl_point);
+        let bssl_point = BoringSslBackend::hash_to_point(msgs, dsts).unwrap();
+        let bssl_bytes = bssl_point_bytes(&bssl_point);
 
-        let (rc_decoded, _) = rustcrypto::decode_point(&bssl_bytes);
+        let (rc_decoded, _) = RustCryptoBackend::decode_point(&bssl_bytes);
         assert!(bool::from(rc_decoded.is_some()));
-        assert_eq!(bssl_bytes, rustcrypto_point_bytes(&rc_decoded.unwrap()));
+        assert_eq!(bssl_bytes, rc_point_bytes(&rc_decoded.unwrap()));
     }
 
     // -----------------------------------------------------------------------
@@ -289,10 +277,6 @@ mod cross_backend_tests {
 
     #[test]
     fn test_generator_h_parity() {
-        // Generator H is derived via:
-        //   H = hash_to_point([encode(G)], ["HashToGroup-" || context_string || "generatorH"])
-        // This must be identical across both backends.
-
         let context_strings = [
             b"ATHMV1-P256-4-test_deployment_id".to_vec(),
             b"ATHMV1-P256-1-prod".to_vec(),
@@ -300,28 +284,25 @@ mod cross_backend_tests {
         ];
 
         for ctx in &context_strings {
-            // Both backends should produce the same generator
-            let rc_gen = rustcrypto::point_generator();
+            let rc_gen = RustCryptoBackend::point_generator();
             let mut g_bytes_rc = Vec::new();
-            rustcrypto::encode_point(&rc_gen, &mut g_bytes_rc);
+            RustCryptoBackend::encode_point(&rc_gen, &mut g_bytes_rc);
 
-            let bssl_gen = boringssl::point_generator();
+            let bssl_gen = BoringSslBackend::point_generator();
             let mut g_bytes_bssl = Vec::new();
-            boringssl::encode_point(&bssl_gen, &mut g_bytes_bssl);
+            BoringSslBackend::encode_point(&bssl_gen, &mut g_bytes_bssl);
 
-            // Verify G is the same (sanity check)
             assert_eq!(g_bytes_rc, g_bytes_bssl, "Generator G mismatch");
 
-            // Now compute H via both backends
             let msgs: &[&[u8]] = &[&g_bytes_rc];
             let dsts: &[&[u8]] = &[b"HashToGroup-", ctx.as_slice(), b"generatorH"];
 
-            let rc_h = rustcrypto::hash_to_point(msgs, dsts).unwrap();
-            let bssl_h = boringssl::hash_to_point(msgs, dsts).unwrap();
+            let rc_h = RustCryptoBackend::hash_to_point(msgs, dsts).unwrap();
+            let bssl_h = BoringSslBackend::hash_to_point(msgs, dsts).unwrap();
 
             assert_eq!(
-                rustcrypto_point_bytes(&rc_h),
-                boringssl_point_bytes(&bssl_h),
+                rc_point_bytes(&rc_h),
+                bssl_point_bytes(&bssl_h),
                 "Generator H mismatch for context {:?}",
                 String::from_utf8_lossy(ctx)
             );
@@ -334,60 +315,48 @@ mod cross_backend_tests {
 
     #[test]
     fn test_scalar_arithmetic_parity() {
-        use subtle::ConstantTimeEq;
+        let a_rc = RustCryptoBackend::hash_to_scalar(&[b"scalar_a"], &[b"TestDST"]).unwrap();
+        let b_rc = RustCryptoBackend::hash_to_scalar(&[b"scalar_b"], &[b"TestDST"]).unwrap();
+        let a_bssl = BoringSslBackend::hash_to_scalar(&[b"scalar_a"], &[b"TestDST"]).unwrap();
+        let b_bssl = BoringSslBackend::hash_to_scalar(&[b"scalar_b"], &[b"TestDST"]).unwrap();
 
-        // Use hash_to_scalar to get deterministic scalars for testing
-        let a_rc = rustcrypto::hash_to_scalar(&[b"scalar_a"], &[b"TestDST"]).unwrap();
-        let b_rc = rustcrypto::hash_to_scalar(&[b"scalar_b"], &[b"TestDST"]).unwrap();
-        let a_bssl = boringssl::hash_to_scalar(&[b"scalar_a"], &[b"TestDST"]).unwrap();
-        let b_bssl = boringssl::hash_to_scalar(&[b"scalar_b"], &[b"TestDST"]).unwrap();
-
-        // Verify inputs match
-        assert_eq!(rustcrypto_scalar_bytes(&a_rc), boringssl_scalar_bytes(&a_bssl));
-        assert_eq!(rustcrypto_scalar_bytes(&b_rc), boringssl_scalar_bytes(&b_bssl));
+        assert_eq!(rc_scalar_bytes(&a_rc), bssl_scalar_bytes(&a_bssl));
+        assert_eq!(rc_scalar_bytes(&b_rc), bssl_scalar_bytes(&b_bssl));
 
         // Addition
-        let sum_rc = a_rc + b_rc;
-        let sum_bssl = a_bssl + b_bssl;
         assert_eq!(
-            rustcrypto_scalar_bytes(&sum_rc),
-            boringssl_scalar_bytes(&sum_bssl),
+            rc_scalar_bytes(&(a_rc + b_rc)),
+            bssl_scalar_bytes(&(a_bssl + b_bssl)),
             "Scalar addition mismatch"
         );
 
         // Subtraction
-        let diff_rc = a_rc - b_rc;
-        let diff_bssl = a_bssl - b_bssl;
         assert_eq!(
-            rustcrypto_scalar_bytes(&diff_rc),
-            boringssl_scalar_bytes(&diff_bssl),
+            rc_scalar_bytes(&(a_rc - b_rc)),
+            bssl_scalar_bytes(&(a_bssl - b_bssl)),
             "Scalar subtraction mismatch"
         );
 
         // Multiplication
-        let prod_rc = a_rc * b_rc;
-        let prod_bssl = a_bssl * b_bssl;
         assert_eq!(
-            rustcrypto_scalar_bytes(&prod_rc),
-            boringssl_scalar_bytes(&prod_bssl),
+            rc_scalar_bytes(&(a_rc * b_rc)),
+            bssl_scalar_bytes(&(a_bssl * b_bssl)),
             "Scalar multiplication mismatch"
         );
 
         // Negation
-        let neg_rc = -a_rc;
-        let neg_bssl = -a_bssl;
         assert_eq!(
-            rustcrypto_scalar_bytes(&neg_rc),
-            boringssl_scalar_bytes(&neg_bssl),
+            rc_scalar_bytes(&(-a_rc)),
+            bssl_scalar_bytes(&(-a_bssl)),
             "Scalar negation mismatch"
         );
 
         // Inversion
-        let inv_rc = a_rc.invert().unwrap();
-        let inv_bssl = a_bssl.invert().unwrap();
+        let inv_rc = RustCryptoBackend::scalar_invert(&a_rc).unwrap();
+        let inv_bssl = BoringSslBackend::scalar_invert(&a_bssl).unwrap();
         assert_eq!(
-            rustcrypto_scalar_bytes(&inv_rc),
-            boringssl_scalar_bytes(&inv_bssl),
+            rc_scalar_bytes(&inv_rc),
+            bssl_scalar_bytes(&inv_bssl),
             "Scalar inversion mismatch"
         );
     }
@@ -398,53 +367,186 @@ mod cross_backend_tests {
 
     #[test]
     fn test_point_arithmetic_parity() {
-        // Get deterministic points via hash_to_point
-        let p_rc = rustcrypto::hash_to_point(&[b"point_p"], &[b"TestDST"]).unwrap();
-        let q_rc = rustcrypto::hash_to_point(&[b"point_q"], &[b"TestDST"]).unwrap();
-        let p_bssl = boringssl::hash_to_point(&[b"point_p"], &[b"TestDST"]).unwrap();
-        let q_bssl = boringssl::hash_to_point(&[b"point_q"], &[b"TestDST"]).unwrap();
+        let p_rc = RustCryptoBackend::hash_to_point(&[b"point_p"], &[b"TestDST"]).unwrap();
+        let q_rc = RustCryptoBackend::hash_to_point(&[b"point_q"], &[b"TestDST"]).unwrap();
+        let p_bssl = BoringSslBackend::hash_to_point(&[b"point_p"], &[b"TestDST"]).unwrap();
+        let q_bssl = BoringSslBackend::hash_to_point(&[b"point_q"], &[b"TestDST"]).unwrap();
 
-        // Verify inputs match
-        assert_eq!(rustcrypto_point_bytes(&p_rc), boringssl_point_bytes(&p_bssl));
-        assert_eq!(rustcrypto_point_bytes(&q_rc), boringssl_point_bytes(&q_bssl));
+        assert_eq!(rc_point_bytes(&p_rc), bssl_point_bytes(&p_bssl));
+        assert_eq!(rc_point_bytes(&q_rc), bssl_point_bytes(&q_bssl));
 
         // Point addition
-        let sum_rc = p_rc + q_rc;
-        let sum_bssl = p_bssl + q_bssl;
         assert_eq!(
-            rustcrypto_point_bytes(&sum_rc),
-            boringssl_point_bytes(&sum_bssl),
+            rc_point_bytes(&(p_rc + q_rc)),
+            bssl_point_bytes(&(p_bssl + q_bssl)),
             "Point addition mismatch"
         );
 
         // Point subtraction
-        let diff_rc = p_rc - q_rc;
-        let diff_bssl = p_bssl - q_bssl;
         assert_eq!(
-            rustcrypto_point_bytes(&diff_rc),
-            boringssl_point_bytes(&diff_bssl),
+            rc_point_bytes(&(p_rc - q_rc)),
+            bssl_point_bytes(&(p_bssl - q_bssl)),
             "Point subtraction mismatch"
         );
 
         // Point negation
-        let neg_rc = -p_rc;
-        let neg_bssl = -p_bssl;
         assert_eq!(
-            rustcrypto_point_bytes(&neg_rc),
-            boringssl_point_bytes(&neg_bssl),
+            rc_point_bytes(&(-p_rc)),
+            bssl_point_bytes(&(-p_bssl)),
             "Point negation mismatch"
         );
 
         // Scalar multiplication
-        let s_rc = rustcrypto::hash_to_scalar(&[b"test_scalar"], &[b"TestDST"]).unwrap();
-        let s_bssl = boringssl::hash_to_scalar(&[b"test_scalar"], &[b"TestDST"]).unwrap();
+        let s_rc = RustCryptoBackend::hash_to_scalar(&[b"test_scalar"], &[b"TestDST"]).unwrap();
+        let s_bssl = BoringSslBackend::hash_to_scalar(&[b"test_scalar"], &[b"TestDST"]).unwrap();
 
-        let mul_rc = p_rc * s_rc;
-        let mul_bssl = p_bssl * s_bssl;
         assert_eq!(
-            rustcrypto_point_bytes(&mul_rc),
-            boringssl_point_bytes(&mul_bssl),
+            rc_point_bytes(&(p_rc * s_rc)),
+            bssl_point_bytes(&(p_bssl * s_bssl)),
             "Point scalar multiplication mismatch"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Tests: end-to-end protocol with both backends
+    //
+    // These tests verify cross-backend interoperability by running the
+    // protocol with one backend for key generation/server-side operations,
+    // serializing all messages, then deserializing and verifying with the
+    // other backend. This mimics the realistic deployment scenario where
+    // server and client use different ECC implementations.
+    // -----------------------------------------------------------------------
+
+    /// Run the full protocol with backend S (server) and backend C (client),
+    /// exchanging all messages via serialization/deserialization.
+    fn run_cross_backend_protocol<S: AthmBackend, C: AthmBackend>() {
+        use crate::{
+            finalize_token_generic, key_gen_generic, token_request_generic, token_response_generic,
+            verify_token_generic, GenericParams, GenericPrivateKey, GenericPublicKey,
+            GenericPublicKeyProof, GenericToken, GenericTokenRequest, GenericTokenResponse,
+        };
+
+        const N_BUCKETS: u8 = 4;
+        let mut rng = rand::thread_rng();
+
+        // --- Server (backend S): Generate keys ---
+        let server_params =
+            GenericParams::<S>::new_generic(N_BUCKETS, b"cross_backend_test".to_vec()).unwrap();
+        let (sk, pk, proof) = key_gen_generic::<S, _>(&server_params, &mut rng);
+
+        // Serialize server outputs.
+        let mut params_bytes = Vec::new();
+        server_params.encode_generic(&mut params_bytes);
+        let mut pk_bytes = Vec::new();
+        pk.encode_generic(&mut pk_bytes);
+        let mut proof_bytes = Vec::new();
+        proof.encode_generic(&mut proof_bytes);
+        let mut sk_bytes = Vec::new();
+        sk.encode_generic(&mut sk_bytes);
+
+        // --- Client (backend C): Deserialize and create token request ---
+        let client_params = GenericParams::<C>::decode_generic(&params_bytes).unwrap();
+        let client_pk = GenericPublicKey::<C>::decode_generic(&pk_bytes).unwrap();
+        let client_proof = GenericPublicKeyProof::<C>::decode_generic(&proof_bytes).unwrap();
+
+        // Verify that params encode identically on both backends.
+        let mut client_params_bytes = Vec::new();
+        client_params.encode_generic(&mut client_params_bytes);
+        assert_eq!(params_bytes, client_params_bytes, "Params re-encode mismatch");
+
+        let (ctx, req) =
+            token_request_generic::<C, _>(&client_pk, &client_proof, &client_params, &mut rng)
+                .unwrap();
+
+        // Serialize client outputs.
+        let mut ctx_bytes = Vec::new();
+        ctx.encode_generic(&mut ctx_bytes);
+        let mut req_bytes = Vec::new();
+        req.encode_generic(&mut req_bytes);
+
+        // --- Server (backend S): Deserialize request and create responses ---
+        let server_req = GenericTokenRequest::<S>::decode_generic(&req_bytes).unwrap();
+
+        // Test token issuance and verification for each of the N_BUCKETS possible metadata values.
+        for metadata in 0..N_BUCKETS {
+            let resp = token_response_generic::<S, _>(
+                &sk,
+                &pk,
+                &server_req,
+                metadata,
+                &server_params,
+                &mut rng,
+            )
+            .unwrap();
+
+            // Serialize server response.
+            let mut resp_bytes = Vec::new();
+            resp.encode_generic(&mut resp_bytes);
+
+            // --- Client (backend C): Deserialize response and finalize ---
+            let client_resp =
+                GenericTokenResponse::<C>::decode_generic(&resp_bytes, N_BUCKETS).unwrap();
+
+            // Verify the response re-encodes identically.
+            let mut client_resp_bytes = Vec::new();
+            client_resp.encode_generic(&mut client_resp_bytes);
+            assert_eq!(
+                resp_bytes, client_resp_bytes,
+                "TokenResponse re-encode mismatch for metadata {metadata}"
+            );
+
+            let token = finalize_token_generic::<C, _>(
+                &ctx,
+                &client_pk,
+                &req,
+                &client_resp,
+                &client_params,
+                &mut rng,
+            )
+            .unwrap();
+
+            // Serialize the token.
+            let mut token_bytes = Vec::new();
+            token.encode_generic(&mut token_bytes);
+
+            // --- Server (backend S): Deserialize token and verify ---
+            let server_token = GenericToken::<S>::decode_generic(&token_bytes).unwrap();
+            let recovered = verify_token_generic::<S>(&sk, &server_token, &server_params).unwrap();
+            assert_eq!(
+                recovered, metadata,
+                "Metadata mismatch: server(S) generated with metadata={metadata}, got {recovered}"
+            );
+
+            // Also verify with backend C (using deserialized private key).
+            let client_sk = GenericPrivateKey::<C>::decode_generic(&sk_bytes).unwrap();
+            let client_token_for_verify = GenericToken::<C>::decode_generic(&token_bytes).unwrap();
+            let recovered_c =
+                verify_token_generic::<C>(&client_sk, &client_token_for_verify, &client_params)
+                    .unwrap();
+            assert_eq!(
+                recovered_c, metadata,
+                "Metadata mismatch: client(C) verify with metadata={metadata}, got {recovered_c}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cross_backend_server_boringssl_client_rustcrypto() {
+        run_cross_backend_protocol::<BoringSslBackend, RustCryptoBackend>();
+    }
+
+    #[test]
+    fn test_cross_backend_server_rustcrypto_client_boringssl() {
+        run_cross_backend_protocol::<RustCryptoBackend, BoringSslBackend>();
+    }
+
+    #[test]
+    fn test_cross_backend_server_rustcrypto_client_rustcrypto() {
+        run_cross_backend_protocol::<RustCryptoBackend, RustCryptoBackend>();
+    }
+
+    #[test]
+    fn test_cross_backend_server_boringssl_client_boringssl() {
+        run_cross_backend_protocol::<BoringSslBackend, BoringSslBackend>();
     }
 }

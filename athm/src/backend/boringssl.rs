@@ -14,8 +14,7 @@
 
 //! BoringSSL backend for ATHM using `bssl_sys` FFI bindings.
 
-#![cfg(feature = "boringssl")]
-
+use super::AthmBackend;
 use core::ptr::{null, null_mut};
 use rand_core::CryptoRngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeLess, CtOption};
@@ -655,6 +654,82 @@ pub fn random_non_zero_scalar<R: CryptoRngCore>(rng: &mut R) -> BsslScalar {
         if !bool::from(s.is_zero()) {
             return s;
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AthmBackend implementation
+// ---------------------------------------------------------------------------
+
+/// Zero-sized marker type for the BoringSSL backend.
+#[derive(Clone)]
+pub struct BoringSslBackend;
+
+impl AthmBackend for BoringSslBackend {
+    type Scalar = BsslScalar;
+    type Point = BsslPoint;
+
+    const SCALAR_SIZE: usize = SCALAR_SIZE;
+    const POINT_SIZE: usize = POINT_SIZE;
+
+    fn scalar_zero() -> Self::Scalar {
+        BsslScalar::ZERO
+    }
+
+    fn scalar_one() -> Self::Scalar {
+        BsslScalar::ONE
+    }
+
+    fn scalar_is_zero(s: &Self::Scalar) -> Choice {
+        s.is_zero()
+    }
+
+    fn scalar_invert(s: &Self::Scalar) -> CtOption<Self::Scalar> {
+        s.invert()
+    }
+
+    fn point_identity() -> Self::Point {
+        BsslPoint::IDENTITY
+    }
+
+    fn point_generator() -> Self::Point {
+        point_generator()
+    }
+
+    fn point_is_identity(p: &Self::Point) -> Choice {
+        p.is_identity()
+    }
+
+    fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Point, &'static str> {
+        hash_to_point(msgs, dsts)
+    }
+
+    fn hash_to_scalar(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Scalar, &'static str> {
+        hash_to_scalar(msgs, dsts)
+    }
+
+    fn encode_scalar(scalar: &Self::Scalar, out: &mut Vec<u8>) {
+        encode_scalar(scalar, out)
+    }
+
+    fn decode_scalar(input: &[u8]) -> (CtOption<Self::Scalar>, &[u8]) {
+        decode_scalar(input)
+    }
+
+    fn encode_point(point: &Self::Point, out: &mut Vec<u8>) {
+        encode_point(point, out)
+    }
+
+    fn decode_point(input: &[u8]) -> (CtOption<Self::Point>, &[u8]) {
+        decode_point(input)
+    }
+
+    fn random_scalar<R: CryptoRngCore>(rng: &mut R) -> Self::Scalar {
+        random_scalar(rng)
+    }
+
+    fn random_non_zero_scalar<R: CryptoRngCore>(rng: &mut R) -> Self::Scalar {
+        random_non_zero_scalar(rng)
     }
 }
 
