@@ -27,12 +27,14 @@ checksum = "862ed96ca487e809f1c8e5a8447f6ee2cf102f846893800b20cebdf541fc6bbd"
 name = "athm"
 version = "0.1.0"
 dependencies = [
+ "bssl-sys",
  "criterion",
  "digest",
  "elliptic-curve",
  "ff",
  "group",
  "hex",
+ "hex-literal",
  "p256",
  "rand",
  "rand_chacha",
@@ -83,6 +85,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "bssl-macros"
+version = "0.1.0"
+
+[[package]]
+name = "bssl-sys"
+version = "0.1.0"
+dependencies = [
+ "bssl-macros",
 ]
 
 [[package]]
@@ -393,6 +406,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-literal"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hmac"

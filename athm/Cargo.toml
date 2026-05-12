@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = ["rustcrypto"]
 rustcrypto = ["p256", "elliptic-curve", "sha2", "group", "ff", "sec1"]
+boringssl = ["bssl-sys", "sha2"]
 test-vectors = ["hex", "rand_chacha", "serde", "serde_json"]
 
 [dependencies]
@@ -25,9 +26,11 @@ hex = { version = "0.4", optional = true }
 rand_chacha = { version = "0.3", optional = true }
 serde = { version = "1.0", optional = true, features = ["derive"]  }
 serde_json = { version = "1.0", optional = true}
+bssl-sys = { path = "boringssl/rust/bssl-sys", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+hex-literal = "0.4"
 
 [[bench]]
 name = "athm_benchmarks"
