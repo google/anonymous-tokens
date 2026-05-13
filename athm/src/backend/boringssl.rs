@@ -18,13 +18,192 @@
 //! operations in ATHM are constant-time.
 
 use super::AthmBackend;
-use core::ptr::{null, null_mut};
+use core::ptr::{null, null_mut, NonNull};
 use rand_core::CryptoRngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeLess, CtOption};
 use zeroize::Zeroize;
 
 pub const SCALAR_SIZE: usize = 32;
 pub const POINT_SIZE: usize = 33; // Compressed P-256 point
+
+// ---------------------------------------------------------------------------
+// RAII wrappers for BoringSSL types
+// ---------------------------------------------------------------------------
+
+/// Owns a `BIGNUM` through `NonNull` and frees it on drop via `BN_free`.
+struct BnWrapper(NonNull<bssl_sys::BIGNUM>);
+
+impl BnWrapper {
+    /// Allocate a new zero-valued BIGNUM. Panics if allocation fails.
+    fn new() -> Self {
+        // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
+        let ptr = unsafe { bssl_sys::BN_new() };
+        Self(NonNull::new(ptr).expect("BN_new returned null"))
+    }
+
+    /// Create a BIGNUM from big-endian bytes.
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let bn = Self::new();
+        // SAFETY: bn is a valid BIGNUM pointer. bytes.as_ptr() and bytes.len()
+        // are valid parameters for the input buffer.
+        //
+        // Constant-time assuming bytes.len() is constant.
+        let r = unsafe { bssl_sys::BN_bin2bn(bytes.as_ptr(), bytes.len(), bn.as_mut_ptr()) };
+        assert!(!r.is_null());
+        bn
+    }
+
+    /// Serialize this BIGNUM to a 32-byte big-endian array.
+    fn to_bytes32(&self) -> [u8; SCALAR_SIZE] {
+        Self::raw_to_bytes32(self.as_ptr())
+    }
+
+    /// Serialize a BIGNUM pointer to a 32-byte big-endian array.
+    /// This is useful for borrowed pointers (e.g. from EC_GROUP_get0_order)
+    /// that are not owned by a BnWrapper.
+    ///
+    /// Constant-time assuming `bn` is valid and of length less than or equal to SCALAR_SIZE.
+    fn raw_to_bytes32(bn: *const bssl_sys::BIGNUM) -> [u8; SCALAR_SIZE] {
+        let mut out = [0u8; SCALAR_SIZE];
+        // SAFETY: out.as_mut_ptr() points to a valid buffer of SCALAR_SIZE bytes.
+        // bn is assumed to be a valid BIGNUM pointer.
+        let r = unsafe { bssl_sys::BN_bn2bin_padded(out.as_mut_ptr(), SCALAR_SIZE, bn) };
+        assert_eq!(r, 1);
+        out
+    }
+
+    fn as_ptr(&self) -> *const bssl_sys::BIGNUM {
+        self.0.as_ptr()
+    }
+
+    fn as_mut_ptr(&self) -> *mut bssl_sys::BIGNUM {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for BnWrapper {
+    fn drop(&mut self) {
+        // SAFETY: self.0 was allocated by BN_new/BN_bin2bn/BN_mod_inverse and
+        // is a valid non-null pointer.
+        unsafe { bssl_sys::BN_free(self.0.as_ptr()) };
+    }
+}
+
+/// Owns an `EC_POINT` through `NonNull` and frees it on drop via `EC_POINT_free`.
+struct EcPointWrapper(NonNull<bssl_sys::EC_POINT>);
+
+impl EcPointWrapper {
+    /// Allocate a new EC_POINT on the given group. Panics if allocation fails.
+    fn new(group: *const bssl_sys::EC_GROUP) -> Self {
+        // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
+        let ptr = unsafe { bssl_sys::EC_POINT_new(group) };
+        Self(NonNull::new(ptr).expect("EC_POINT_new returned null"))
+    }
+
+    /// Deserialize compressed bytes into an EC_POINT wrapper.
+    /// All-zeros input is treated as the point at infinity (identity).
+    ///
+    /// This function is constant-time as long as the input is not the point at infinity.
+    fn from_bytes(bytes: &[u8; 33]) -> Self {
+        let group = p256_group();
+        let pt = Self::new(group);
+        // All-zeros represents identity (point at infinity)
+        if bytes == &[0u8; 33] {
+            // SAFETY: group and pt are valid pointers.
+            let r = unsafe { bssl_sys::EC_POINT_set_to_infinity(group, pt.as_mut_ptr()) };
+            assert_eq!(r, 1);
+            return pt;
+        }
+        // SAFETY: group and pt are valid pointers, bytes points to a 33-byte buffer.
+        let r = unsafe {
+            bssl_sys::EC_POINT_oct2point(
+                group,
+                pt.as_mut_ptr(),
+                bytes.as_ptr(),
+                33,
+                /*ctx=*/ null_mut(),
+            )
+        };
+        assert_eq!(r, 1, "EC_POINT_oct2point failed");
+        pt
+    }
+
+    /// Serialize this EC_POINT to 33-byte compressed form.
+    /// Returns all-zeros for the point at infinity (identity).
+    ///
+    /// This function is constant-time as long as the input is not the point at infinity.
+    fn to_bytes33(&self) -> [u8; 33] {
+        Self::raw_to_bytes33(self.as_ptr())
+    }
+
+    /// Serialize an EC_POINT pointer to 33-byte compressed form.
+    /// This is useful for borrowed pointers (e.g. from EC_GROUP_get0_generator)
+    /// that are not owned by an EcPointWrapper.
+    ///
+    /// This function is constant-time as long as the input is not the point at infinity.
+    fn raw_to_bytes33(pt: *const bssl_sys::EC_POINT) -> [u8; 33] {
+        let group = p256_group();
+        // Check if point is at infinity
+        // SAFETY: group and pt are valid pointers.
+        if unsafe { bssl_sys::EC_POINT_is_at_infinity(group, pt) } == 1 {
+            return [0u8; 33];
+        }
+        let mut buf = [0u8; 33];
+        // SAFETY: group and pt are valid, buf points to a 33-byte buffer.
+        let len = unsafe {
+            bssl_sys::EC_POINT_point2oct(
+                group,
+                pt,
+                bssl_sys::point_conversion_form_t::POINT_CONVERSION_COMPRESSED,
+                buf.as_mut_ptr(),
+                33,
+                /*ctx=*/ null_mut(),
+            )
+        };
+        assert_eq!(len, 33);
+        buf
+    }
+
+    fn as_ptr(&self) -> *const bssl_sys::EC_POINT {
+        self.0.as_ptr()
+    }
+
+    fn as_mut_ptr(&self) -> *mut bssl_sys::EC_POINT {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for EcPointWrapper {
+    fn drop(&mut self) {
+        // SAFETY: self.0 was allocated by EC_POINT_new and is a valid non-null
+        // pointer.
+        unsafe { bssl_sys::EC_POINT_free(self.0.as_ptr()) };
+    }
+}
+
+/// Owns a `BN_CTX` through `NonNull` and frees it on drop via `BN_CTX_free`.
+struct BnCtxWrapper(NonNull<bssl_sys::BN_CTX>);
+
+impl BnCtxWrapper {
+    /// Allocate a new BN_CTX. Panics if allocation fails.
+    fn new() -> Self {
+        // SAFETY: BN_CTX_new() is safe to call and returns a valid BN_CTX or null.
+        let ptr = unsafe { bssl_sys::BN_CTX_new() };
+        Self(NonNull::new(ptr).expect("BN_CTX_new returned null"))
+    }
+
+    fn as_mut_ptr(&self) -> *mut bssl_sys::BN_CTX {
+        self.0.as_ptr()
+    }
+}
+
+impl Drop for BnCtxWrapper {
+    fn drop(&mut self) {
+        // SAFETY: self.0 was allocated by BN_CTX_new and is a valid non-null
+        // pointer.
+        unsafe { bssl_sys::BN_CTX_free(self.0.as_ptr()) };
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Low-level FFI helpers
@@ -47,41 +226,6 @@ fn p256_order() -> *const bssl_sys::BIGNUM {
     o
 }
 
-/// Create a new BIGNUM from big-endian bytes.
-/// Caller must free with BN_free.
-fn bn_from_bytes(bytes: &[u8]) -> *mut bssl_sys::BIGNUM {
-    // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
-    let bn = unsafe { bssl_sys::BN_new() };
-    assert!(!bn.is_null());
-    // SAFETY: bn is a valid BIGNUM pointer allocated by BN_new(). bytes.as_ptr()
-    // and bytes.len() are valid parameters for the input buffer.
-    //
-    // Constant-time assuming bytes.len() is constant.
-    let r = unsafe { bssl_sys::BN_bin2bn(bytes.as_ptr(), bytes.len(), bn) };
-    assert!(!r.is_null());
-    bn
-}
-
-/// Serialize a BIGNUM to a 32-byte big-endian array.
-fn bn_to_bytes32(bn: *const bssl_sys::BIGNUM) -> [u8; SCALAR_SIZE] {
-    let mut out = [0u8; SCALAR_SIZE];
-    // SAFETY: out.as_mut_ptr() points to a valid buffer of SCALAR_SIZE bytes.
-    // bn is assumed to be a valid BIGNUM pointer.
-    //
-    // Constant-time assuming `bn` is valid and of length less than or equal to SCALAR_SIZE.
-    let r = unsafe { bssl_sys::BN_bn2bin_padded(out.as_mut_ptr(), SCALAR_SIZE, bn) };
-    assert_eq!(r, 1);
-    out
-}
-
-/// Create a new BN_CTX. Caller must free with BN_CTX_free.
-fn new_bn_ctx() -> *mut bssl_sys::BN_CTX {
-    // SAFETY: BN_CTX_new() is safe to call and returns a valid BN_CTX or null.
-    let ctx = unsafe { bssl_sys::BN_CTX_new() };
-    assert!(!ctx.is_null());
-    ctx
-}
-
 /// Perform (a OP b) mod order using a constant-time "quick" variant.
 /// The _quick variants (BN_mod_add_quick, BN_mod_sub_quick) require that both
 /// operands are non-negative and less than the modulus, which is always true for
@@ -100,27 +244,17 @@ unsafe fn bn_mod_op_quick(
         *const bssl_sys::BIGNUM,
     ) -> i32,
 ) -> [u8; SCALAR_SIZE] {
-    let bn_a = bn_from_bytes(a);
-    let bn_b = bn_from_bytes(b);
-    // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
-    let bn_r = unsafe { bssl_sys::BN_new() };
-    assert!(!bn_r.is_null());
+    let bn_a = BnWrapper::from_bytes(a);
+    let bn_b = BnWrapper::from_bytes(b);
+    let bn_r = BnWrapper::new();
 
     // SAFETY: bn_r, bn_a, bn_b, and p256_order() are all valid pointers. However, this still
     // assumes that `op` is safe to call on the arguments, which is why this function is unsafe.
-    let rc = unsafe { op(bn_r, bn_a, bn_b, p256_order()) };
+    let rc = unsafe { op(bn_r.as_mut_ptr(), bn_a.as_ptr(), bn_b.as_ptr(), p256_order()) };
     assert_eq!(rc, 1);
 
-    let result = bn_to_bytes32(bn_r);
-
-    // SAFETY: bn_r, bn_a, and bn_b were all allocated by BoringSSL
-    // and are valid pointers that need to be freed.
-    unsafe {
-        bssl_sys::BN_free(bn_r);
-        bssl_sys::BN_free(bn_a);
-        bssl_sys::BN_free(bn_b);
-    }
-    result
+    bn_r.to_bytes32()
+    // bn_a, bn_b, bn_r freed automatically on drop.
 }
 
 /// Perform (a OP b) mod order using a BN_mod_* function that requires a BN_CTX.
@@ -139,29 +273,20 @@ unsafe fn bn_mod_op(
         *mut bssl_sys::BN_CTX,
     ) -> i32,
 ) -> [u8; SCALAR_SIZE] {
-    let bn_a = bn_from_bytes(a);
-    let bn_b = bn_from_bytes(b);
-    // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
-    let bn_r = unsafe { bssl_sys::BN_new() };
-    assert!(!bn_r.is_null());
-    let ctx = new_bn_ctx();
+    let bn_a = BnWrapper::from_bytes(a);
+    let bn_b = BnWrapper::from_bytes(b);
+    let bn_r = BnWrapper::new();
+    let ctx = BnCtxWrapper::new();
 
     // SAFETY: bn_r, bn_a, bn_b, p256_order(), and ctx are all valid pointers. However, this still
     // assumes that `op` is safe to call on the arguments, which is why this function is unsafe.
-    let rc = unsafe { op(bn_r, bn_a, bn_b, p256_order(), ctx) };
+    let rc = unsafe {
+        op(bn_r.as_mut_ptr(), bn_a.as_ptr(), bn_b.as_ptr(), p256_order(), ctx.as_mut_ptr())
+    };
     assert_eq!(rc, 1);
 
-    let result = bn_to_bytes32(bn_r);
-
-    // SAFETY: ctx, bn_r, bn_a, and bn_b were all allocated by BoringSSL
-    // and are valid pointers that need to be freed.
-    unsafe {
-        bssl_sys::BN_CTX_free(ctx);
-        bssl_sys::BN_free(bn_r);
-        bssl_sys::BN_free(bn_a);
-        bssl_sys::BN_free(bn_b);
-    }
-    result
+    bn_r.to_bytes32()
+    // bn_a, bn_b, bn_r, ctx freed automatically on drop.
 }
 
 // ---------------------------------------------------------------------------
@@ -194,24 +319,22 @@ impl BsslScalar {
         // Use 1 as a fallback input so BN_mod_inverse always succeeds.
         let safe_input = BsslScalar::conditional_select(&BsslScalar::ONE, self, is_nonzero);
 
-        let bn_a = bn_from_bytes(&safe_input.0);
-        let ctx = new_bn_ctx();
+        let bn_a = BnWrapper::from_bytes(&safe_input.0);
+        let ctx = BnCtxWrapper::new();
 
-        // SAFETY: bn_a, p256_order(), and ctx are all valid pointers.
-        // safe_input is guaranteed to be non-zero, so BN_mod_inverse will succeed.
-        let r = unsafe { bssl_sys::BN_mod_inverse(null_mut(), bn_a, p256_order(), ctx) };
+        // SAFETY: bn_a, p256_order(), and ctx are valid pointers.
+        // Passing null for the first arg makes BN_mod_inverse allocate the result.
+        let r = unsafe {
+            bssl_sys::BN_mod_inverse(null_mut(), bn_a.as_ptr(), p256_order(), ctx.as_mut_ptr())
+        };
         // The inverse should always succeed on the safe_input (which is nonzero).
         assert!(!r.is_null());
-        let result = bn_to_bytes32(r);
+        // Wrap the returned BIGNUM so it is freed on drop.
+        let r = BnWrapper(NonNull::new(r).unwrap());
+        let result = r.to_bytes32();
 
-        // SAFETY: ctx, bn_a, and r were all allocated by BoringSSL
-        // and are valid pointers that need to be freed.
-        unsafe {
-            bssl_sys::BN_CTX_free(ctx);
-            bssl_sys::BN_free(bn_a);
-            bssl_sys::BN_free(r);
-        }
         CtOption::new(BsslScalar(result), is_nonzero)
+        // bn_a, r, ctx freed automatically on drop.
     }
 }
 
@@ -334,69 +457,15 @@ impl core::ops::Neg for BsslPoint {
     type Output = BsslPoint;
     fn neg(self) -> BsslPoint {
         let group = p256_group();
-        let pt = ec_point_from_bytes(&self.0);
-        // SAFETY: group and pt are valid pointers. `ctx` may be null.
+        let pt = EcPointWrapper::from_bytes(&self.0);
+        // SAFETY: group and pt are valid pointers.
         let rc = unsafe {
-            // We can pass a non-null ctx if this becomes a performance bottleneck.
-            bssl_sys::EC_POINT_invert(group, pt, /*ctx=*/ null_mut())
+            bssl_sys::EC_POINT_invert(group, pt.as_mut_ptr(), /*ctx=*/ null_mut())
         };
         assert_eq!(rc, 1);
-        let result = ec_point_to_bytes33(pt);
-        // SAFETY: pt is a valid pointer allocated by ec_point_from_bytes.
-        unsafe { bssl_sys::EC_POINT_free(pt) };
-        BsslPoint(result)
+        BsslPoint(pt.to_bytes33())
+        // pt freed automatically on drop.
     }
-}
-
-/// Deserialize compressed bytes into an EC_POINT. Caller must free with EC_POINT_free.
-/// All-zeros input is treated as the point at infinity (identity).
-///
-/// This function is constant-time as long as the input is not the point at infinity.
-fn ec_point_from_bytes(bytes: &[u8; 33]) -> *mut bssl_sys::EC_POINT {
-    let group = p256_group();
-    // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-    let pt = unsafe { bssl_sys::EC_POINT_new(group) };
-    assert!(!pt.is_null());
-    // All-zeros represents identity (point at infinity)
-    if bytes == &[0u8; 33] {
-        // SAFETY: group and pt are valid pointers.
-        let r = unsafe { bssl_sys::EC_POINT_set_to_infinity(group, pt) };
-        assert_eq!(r, 1);
-        return pt;
-    }
-    // SAFETY: group and pt are valid pointers, bytes points to a 33-byte buffer. `ctx` may be null.
-    let r = unsafe {
-        bssl_sys::EC_POINT_oct2point(group, pt, bytes.as_ptr(), 33, /*ctx=*/ null_mut())
-    };
-    assert_eq!(r, 1, "EC_POINT_oct2point failed");
-    pt
-}
-
-/// Serialize an EC_POINT to 33-byte compressed form.
-/// Returns all-zeros for the point at infinity (identity).
-///
-/// This function is constant-time as long as the input is not the point at infinity.
-fn ec_point_to_bytes33(pt: *const bssl_sys::EC_POINT) -> [u8; 33] {
-    let group = p256_group();
-    // Check if point is at infinity
-    // SAFETY: group and pt are valid pointers.
-    if unsafe { bssl_sys::EC_POINT_is_at_infinity(group, pt) } == 1 {
-        return [0u8; 33];
-    }
-    let mut buf = [0u8; 33];
-    // SAFETY: group and pt are valid, buf points to a 33-byte buffer.
-    let len = unsafe {
-        bssl_sys::EC_POINT_point2oct(
-            group,
-            pt,
-            bssl_sys::point_conversion_form_t::POINT_CONVERSION_COMPRESSED,
-            buf.as_mut_ptr(),
-            33,
-            /*ctx=*/ null_mut(),
-        )
-    };
-    assert_eq!(len, 33);
-    buf
 }
 
 impl core::ops::Add<BsslPoint> for BsslPoint {
@@ -405,22 +474,16 @@ impl core::ops::Add<BsslPoint> for BsslPoint {
     /// Constant-time assuming neither inputs nor output are the point at infinity.
     fn add(self, rhs: BsslPoint) -> BsslPoint {
         let group = p256_group();
-        let a = ec_point_from_bytes(&self.0);
-        let b = ec_point_from_bytes(&rhs.0);
-        // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-        let r = unsafe { bssl_sys::EC_POINT_new(group) };
-        assert!(!r.is_null());
+        let a = EcPointWrapper::from_bytes(&self.0);
+        let b = EcPointWrapper::from_bytes(&rhs.0);
+        let r = EcPointWrapper::new(group);
         // SAFETY: group, r, a, and b are all valid pointers.
-        let rc = unsafe { bssl_sys::EC_POINT_add(group, r, a, b, null_mut()) };
+        let rc = unsafe {
+            bssl_sys::EC_POINT_add(group, r.as_mut_ptr(), a.as_ptr(), b.as_ptr(), null_mut())
+        };
         assert_eq!(rc, 1);
-        let result = ec_point_to_bytes33(r);
-        // SAFETY: r, a, and b are valid pointers that need to be freed.
-        unsafe {
-            bssl_sys::EC_POINT_free(r);
-            bssl_sys::EC_POINT_free(a);
-            bssl_sys::EC_POINT_free(b);
-        }
-        BsslPoint(result)
+        BsslPoint(r.to_bytes33())
+        // r, a, b freed automatically on drop.
     }
 }
 
@@ -437,30 +500,28 @@ impl core::ops::Sub<BsslPoint> for BsslPoint {
     /// Constant-time assuming neither inputs nor output are the point at infinity.
     fn sub(self, rhs: BsslPoint) -> BsslPoint {
         let group = p256_group();
-        let a = ec_point_from_bytes(&self.0);
-        let b = ec_point_from_bytes(&rhs.0);
+        let a = EcPointWrapper::from_bytes(&self.0);
+        let b = EcPointWrapper::from_bytes(&rhs.0);
         // Negate b in place
         // SAFETY: group and b are valid pointers.
         let rc = unsafe {
-            bssl_sys::EC_POINT_invert(group, b, /*ctx=*/ null_mut())
+            bssl_sys::EC_POINT_invert(group, b.as_mut_ptr(), /*ctx=*/ null_mut())
         };
         assert_eq!(rc, 1);
-        // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-        let r = unsafe { bssl_sys::EC_POINT_new(group) };
-        assert!(!r.is_null());
+        let r = EcPointWrapper::new(group);
         // SAFETY: group, r, a, and b are all valid pointers.
         let rc = unsafe {
-            bssl_sys::EC_POINT_add(group, r, a, b, /*ctx=*/ null_mut())
+            bssl_sys::EC_POINT_add(
+                group,
+                r.as_mut_ptr(),
+                a.as_ptr(),
+                b.as_ptr(),
+                /*ctx=*/ null_mut(),
+            )
         };
         assert_eq!(rc, 1);
-        let result = ec_point_to_bytes33(r);
-        // SAFETY: r, a, and b are valid pointers that need to be freed.
-        unsafe {
-            bssl_sys::EC_POINT_free(r);
-            bssl_sys::EC_POINT_free(a);
-            bssl_sys::EC_POINT_free(b);
-        }
-        BsslPoint(result)
+        BsslPoint(r.to_bytes33())
+        // r, a, b freed automatically on drop.
     }
 }
 
@@ -471,25 +532,24 @@ impl core::ops::Mul<BsslScalar> for BsslPoint {
     /// are the point at infinity.
     fn mul(self, rhs: BsslScalar) -> BsslPoint {
         let group = p256_group();
-        let pt = ec_point_from_bytes(&self.0);
-        let bn_s = bn_from_bytes(&rhs.0);
-        // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-        let r = unsafe { bssl_sys::EC_POINT_new(group) };
-        assert!(!r.is_null());
+        let pt = EcPointWrapper::from_bytes(&self.0);
+        let bn_s = BnWrapper::from_bytes(&rhs.0);
+        let r = EcPointWrapper::new(group);
         // r = NULL*gen + pt*bn_s  (i.e. pt * scalar)
-        // SAFETY: group, r, pt, and bn_s are all valid pointers. `ctx` may be null.
+        // SAFETY: group, r, pt, and bn_s are all valid pointers.
         let rc = unsafe {
-            bssl_sys::EC_POINT_mul(group, r, null(), pt, bn_s, /*ctx=*/ null_mut())
+            bssl_sys::EC_POINT_mul(
+                group,
+                r.as_mut_ptr(),
+                null(),
+                pt.as_ptr(),
+                bn_s.as_ptr(),
+                /*ctx=*/ null_mut(),
+            )
         };
         assert_eq!(rc, 1);
-        let result = ec_point_to_bytes33(r);
-        // SAFETY: r, pt, and bn_s are valid pointers that need to be freed.
-        unsafe {
-            bssl_sys::EC_POINT_free(r);
-            bssl_sys::EC_POINT_free(pt);
-            bssl_sys::BN_free(bn_s);
-        }
-        BsslPoint(result)
+        BsslPoint(r.to_bytes33())
+        // r, pt, bn_s freed automatically on drop.
     }
 }
 
@@ -533,7 +593,8 @@ pub fn point_generator() -> BsslPoint {
     // is safe to call and returns a valid pointer owned by the group.
     let generator = unsafe { bssl_sys::EC_GROUP_get0_generator(group) };
     assert!(!generator.is_null());
-    BsslPoint(ec_point_to_bytes33(generator))
+    // Use raw_to_bytes33 to serialize the borrowed pointer without copying.
+    BsslPoint(EcPointWrapper::raw_to_bytes33(generator))
 }
 
 /// Not constant-time, but operates only on untrusted public input.
@@ -549,17 +610,16 @@ pub fn decode_point(input: &[u8]) -> (CtOption<BsslPoint>, &[u8]) {
     }
 
     let group = p256_group();
-    // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-    let pt = unsafe { bssl_sys::EC_POINT_new(group) };
-    assert!(!pt.is_null());
+    let pt = EcPointWrapper::new(group);
     // SAFETY: group and pt are valid pointers, bytes points to a 33-byte buffer.
-    let r = unsafe { bssl_sys::EC_POINT_oct2point(group, pt, bytes.as_ptr(), 33, null_mut()) };
+    let r = unsafe {
+        bssl_sys::EC_POINT_oct2point(group, pt.as_mut_ptr(), bytes.as_ptr(), 33, null_mut())
+    };
     if r != 1 {
         // If oct2point fails, it leaves errors on the queue. Clear them.
         unsafe { bssl_sys::ERR_clear_error() };
     }
-    // SAFETY: pt is a valid pointer that needs to be freed.
-    unsafe { bssl_sys::EC_POINT_free(pt) };
+    // pt freed automatically on drop.
 
     let valid = Choice::from((r == 1) as u8);
     (CtOption::new(BsslPoint(bytes), valid), &input[33..])
@@ -569,7 +629,7 @@ pub fn decode_point(input: &[u8]) -> (CtOption<BsslPoint>, &[u8]) {
 fn p256_order_bytes() -> &'static [u8; SCALAR_SIZE] {
     use std::sync::OnceLock;
     static ORDER: OnceLock<[u8; SCALAR_SIZE]> = OnceLock::new();
-    ORDER.get_or_init(|| bn_to_bytes32(p256_order()))
+    ORDER.get_or_init(|| BnWrapper::raw_to_bytes32(p256_order()))
 }
 
 /// Not constant-time (the `<` comparison short-circuits), but operates only on untrusted
@@ -599,17 +659,13 @@ pub fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslPoint, &'stat
     let dst_cat: Vec<u8> = dsts.iter().flat_map(|d| d.iter().copied()).collect();
 
     let group = p256_group();
-    // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-    let pt = unsafe { bssl_sys::EC_POINT_new(group) };
-    if pt.is_null() {
-        return Err("EC_POINT_new failed");
-    }
+    let pt = EcPointWrapper::new(group);
     // SAFETY: group and pt are valid pointers. dst_cat and msg_cat slices
     // provide valid pointers and lengths to byte buffers.
     let rc = unsafe {
         bssl_sys::EC_hash_to_curve_p256_xmd_sha256_sswu(
             group,
-            pt,
+            pt.as_mut_ptr(),
             dst_cat.as_ptr(),
             dst_cat.len(),
             msg_cat.as_ptr(),
@@ -617,14 +673,10 @@ pub fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslPoint, &'stat
         )
     };
     if rc != 1 {
-        // SAFETY: pt is a valid pointer that needs to be freed on error.
-        unsafe { bssl_sys::EC_POINT_free(pt) };
         return Err("hash_to_curve failed");
     }
-    let result = ec_point_to_bytes33(pt);
-    // SAFETY: pt is a valid pointer that needs to be freed.
-    unsafe { bssl_sys::EC_POINT_free(pt) };
-    Ok(BsslPoint(result))
+    Ok(BsslPoint(pt.to_bytes33()))
+    // pt freed automatically on drop.
 }
 
 pub fn hash_to_scalar(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslScalar, &'static str> {
@@ -639,23 +691,17 @@ pub fn hash_to_scalar(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslScalar, &'st
     let uniform_bytes = expand_message_xmd_sha256(&msg_cat, &dst_cat, 48)?;
 
     // Interpret as big-endian integer and reduce mod order
-    let bn = bn_from_bytes(&uniform_bytes);
-    // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
-    let bn_r = unsafe { bssl_sys::BN_new() };
-    assert!(!bn_r.is_null());
-    let ctx = new_bn_ctx();
-    // BN_mod is actually BN_nnmod for non-negative results
+    let bn = BnWrapper::from_bytes(&uniform_bytes);
+    let bn_r = BnWrapper::new();
+    let ctx = BnCtxWrapper::new();
+    // BN_nnmod computes non-negative remainder.
     // SAFETY: bn_r, bn, p256_order(), and ctx are all valid pointers.
-    let rc = unsafe { bssl_sys::BN_nnmod(bn_r, bn, p256_order(), ctx) };
+    let rc = unsafe {
+        bssl_sys::BN_nnmod(bn_r.as_mut_ptr(), bn.as_ptr(), p256_order(), ctx.as_mut_ptr())
+    };
     assert_eq!(rc, 1);
-    let result = bn_to_bytes32(bn_r);
-    // SAFETY: ctx, bn_r, and bn are valid pointers that need to be freed.
-    unsafe {
-        bssl_sys::BN_CTX_free(ctx);
-        bssl_sys::BN_free(bn_r);
-        bssl_sys::BN_free(bn);
-    }
-    Ok(BsslScalar(result))
+    Ok(BsslScalar(bn_r.to_bytes32()))
+    // bn, bn_r, ctx freed automatically on drop.
 }
 
 /// expand_message_xmd using SHA-256, per RFC 9380 §5.3.1.
@@ -712,16 +758,12 @@ fn expand_message_xmd_sha256(
 pub fn random_scalar<R: CryptoRngCore>(_rng: &mut R) -> BsslScalar {
     // Use BoringSSL's RNG directly (ignores the Rust rng parameter).
     let order = p256_order();
-    // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
-    let bn = unsafe { bssl_sys::BN_new() };
-    assert!(!bn.is_null());
+    let bn = BnWrapper::new();
     // SAFETY: bn and order are valid pointers.
-    let rc = unsafe { bssl_sys::BN_rand_range(bn, order) };
+    let rc = unsafe { bssl_sys::BN_rand_range(bn.as_mut_ptr(), order) };
     assert_eq!(rc, 1);
-    let result = bn_to_bytes32(bn);
-    // SAFETY: bn is a valid pointer that needs to be freed.
-    unsafe { bssl_sys::BN_free(bn) };
-    BsslScalar(result)
+    BsslScalar(bn.to_bytes32())
+    // bn freed automatically on drop.
 }
 
 pub fn random_non_zero_scalar<R: CryptoRngCore>(rng: &mut R) -> BsslScalar {
