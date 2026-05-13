@@ -13,6 +13,9 @@
 // limitations under the License.
 
 //! BoringSSL backend for ATHM using `bssl_sys` FFI bindings.
+//!
+//! This backend is not constant-time in general. However, the code paths needed for the *client*
+//! operations in ATHM are constant-time.
 
 use super::AthmBackend;
 use core::ptr::{null, null_mut};
@@ -52,6 +55,8 @@ fn bn_from_bytes(bytes: &[u8]) -> *mut bssl_sys::BIGNUM {
     assert!(!bn.is_null());
     // SAFETY: bn is a valid BIGNUM pointer allocated by BN_new(). bytes.as_ptr()
     // and bytes.len() are valid parameters for the input buffer.
+    //
+    // Constant-time assuming bytes.len() is constant.
     let r = unsafe { bssl_sys::BN_bin2bn(bytes.as_ptr(), bytes.len(), bn) };
     assert!(!r.is_null());
     bn
@@ -62,6 +67,8 @@ fn bn_to_bytes32(bn: *const bssl_sys::BIGNUM) -> [u8; SCALAR_SIZE] {
     let mut out = [0u8; SCALAR_SIZE];
     // SAFETY: out.as_mut_ptr() points to a valid buffer of SCALAR_SIZE bytes.
     // bn is assumed to be a valid BIGNUM pointer.
+    //
+    // Constant-time assuming `bn` is valid and of length less than or equal to SCALAR_SIZE.
     let r = unsafe { bssl_sys::BN_bn2bin_padded(out.as_mut_ptr(), SCALAR_SIZE, bn) };
     assert_eq!(r, 1);
     out
@@ -75,9 +82,53 @@ fn new_bn_ctx() -> *mut bssl_sys::BN_CTX {
     ctx
 }
 
-/// Perform (a OP b) mod order, where OP is one of the BN_mod_* functions.
-/// Returns result as SCALAR_SIZE-byte big-endian.
-fn bn_mod_op(
+/// Perform (a OP b) mod order using a constant-time "quick" variant.
+/// The _quick variants (BN_mod_add_quick, BN_mod_sub_quick) require that both
+/// operands are non-negative and less than the modulus, which is always true for
+/// our reduced scalars. They are constant-time because they internally use
+/// bn_mod_add_words / bn_mod_sub_words (the same primitives as ec_scalar_add).
+///
+/// SAFETY: `a` and `b` must be valid big-endian scalar values, less than the order, and `op` must
+/// be one of the boringssl mod_*_quick functions.
+unsafe fn bn_mod_op_quick(
+    a: &[u8; SCALAR_SIZE],
+    b: &[u8; SCALAR_SIZE],
+    op: unsafe extern "C" fn(
+        *mut bssl_sys::BIGNUM,
+        *const bssl_sys::BIGNUM,
+        *const bssl_sys::BIGNUM,
+        *const bssl_sys::BIGNUM,
+    ) -> i32,
+) -> [u8; SCALAR_SIZE] {
+    let bn_a = bn_from_bytes(a);
+    let bn_b = bn_from_bytes(b);
+    // SAFETY: BN_new() is safe to call and returns a valid BIGNUM or null.
+    let bn_r = unsafe { bssl_sys::BN_new() };
+    assert!(!bn_r.is_null());
+
+    // SAFETY: bn_r, bn_a, bn_b, and p256_order() are all valid pointers. However, this still
+    // assumes that `op` is safe to call on the arguments, which is why this function is unsafe.
+    let rc = unsafe { op(bn_r, bn_a, bn_b, p256_order()) };
+    assert_eq!(rc, 1);
+
+    let result = bn_to_bytes32(bn_r);
+
+    // SAFETY: bn_r, bn_a, and bn_b were all allocated by BoringSSL
+    // and are valid pointers that need to be freed.
+    unsafe {
+        bssl_sys::BN_free(bn_r);
+        bssl_sys::BN_free(bn_a);
+        bssl_sys::BN_free(bn_b);
+    }
+    result
+}
+
+/// Perform (a OP b) mod order using a BN_mod_* function that requires a BN_CTX.
+/// Used for operations like BN_mod_mul that are not available in _quick form.
+///
+/// SAFETY: `a` and `b` must be valid big-endian scalar values, and `op` must be a boringssl mod_*
+/// function that takes a BN_CTX.
+unsafe fn bn_mod_op(
     a: &[u8; SCALAR_SIZE],
     b: &[u8; SCALAR_SIZE],
     op: unsafe extern "C" fn(
@@ -95,8 +146,8 @@ fn bn_mod_op(
     assert!(!bn_r.is_null());
     let ctx = new_bn_ctx();
 
-    // SAFETY: bn_r, bn_a, bn_b, p256_order(), and ctx are all valid pointers.
-    // The op function (e.g. BN_mod_add) is safe to call with valid arguments.
+    // SAFETY: bn_r, bn_a, bn_b, p256_order(), and ctx are all valid pointers. However, this still
+    // assumes that `op` is safe to call on the arguments, which is why this function is unsafe.
     let rc = unsafe { op(bn_r, bn_a, bn_b, p256_order(), ctx) };
     assert_eq!(rc, 1);
 
@@ -136,6 +187,7 @@ impl BsslScalar {
         self.ct_eq(&Self::ZERO)
     }
 
+    // Returns a CtOption, but this implementation is actually NOT constant-time.
     pub fn invert(&self) -> CtOption<BsslScalar> {
         // Always perform the inversion to avoid leaking whether self is zero.
         let is_nonzero = !self.is_zero();
@@ -173,22 +225,36 @@ impl From<u64> for BsslScalar {
 
 impl core::ops::Add<BsslScalar> for BsslScalar {
     type Output = BsslScalar;
+    // Constant-time because both operands are guaranteed to be < order.
     fn add(self, rhs: BsslScalar) -> BsslScalar {
-        BsslScalar(bn_mod_op(&self.0, &rhs.0, bssl_sys::BN_mod_add))
+        BsslScalar(
+            // SAFETY: calling BN_mod_add_quick is safe because both operands are valid bignums and
+            // guaranteed to be less than the order.
+            unsafe { bn_mod_op_quick(&self.0, &rhs.0, bssl_sys::BN_mod_add_quick) },
+        )
     }
 }
 
 impl core::ops::Sub<BsslScalar> for BsslScalar {
     type Output = BsslScalar;
+    // Constant-time because both operands are guaranteed to be < order.
     fn sub(self, rhs: BsslScalar) -> BsslScalar {
-        BsslScalar(bn_mod_op(&self.0, &rhs.0, bssl_sys::BN_mod_sub))
+        BsslScalar(
+            // SAFETY: calling BN_mod_sub_quick is safe because both operands are valid bignums and
+            // guaranteed to be less than the order.
+            unsafe { bn_mod_op_quick(&self.0, &rhs.0, bssl_sys::BN_mod_sub_quick) },
+        )
     }
 }
 
 impl core::ops::Mul<BsslScalar> for BsslScalar {
     type Output = BsslScalar;
+    // NOT constant-time.
     fn mul(self, rhs: BsslScalar) -> BsslScalar {
-        BsslScalar(bn_mod_op(&self.0, &rhs.0, bssl_sys::BN_mod_mul))
+        BsslScalar(
+            // SAFETY: calling BN_mod_mul is safe because the arguments are valid bignums.
+            unsafe { bn_mod_op(&self.0, &rhs.0, bssl_sys::BN_mod_mul) },
+        )
     }
 }
 
@@ -201,6 +267,7 @@ impl core::ops::Mul<&BsslScalar> for BsslScalar {
 
 impl core::ops::Neg for BsslScalar {
     type Output = BsslScalar;
+    // Constant-time (delegates to Sub).
     fn neg(self) -> BsslScalar {
         BsslScalar::ZERO - self
     }
@@ -284,10 +351,7 @@ impl core::ops::Neg for BsslPoint {
 /// Deserialize compressed bytes into an EC_POINT. Caller must free with EC_POINT_free.
 /// All-zeros input is treated as the point at infinity (identity).
 ///
-/// NOTE: This function is NOT constant-time (it branches on whether the input
-/// is all-zeros). It is only used in arithmetic operations (Add, Sub, Mul, Neg)
-/// where the point values are not secret. For decoding untrusted input in a
-/// constant-time manner, use `decode_point` instead.
+/// This function is constant-time as long as the input is not the point at infinity.
 fn ec_point_from_bytes(bytes: &[u8; 33]) -> *mut bssl_sys::EC_POINT {
     let group = p256_group();
     // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
@@ -310,6 +374,8 @@ fn ec_point_from_bytes(bytes: &[u8; 33]) -> *mut bssl_sys::EC_POINT {
 
 /// Serialize an EC_POINT to 33-byte compressed form.
 /// Returns all-zeros for the point at infinity (identity).
+///
+/// This function is constant-time as long as the input is not the point at infinity.
 fn ec_point_to_bytes33(pt: *const bssl_sys::EC_POINT) -> [u8; 33] {
     let group = p256_group();
     // Check if point is at infinity
@@ -335,6 +401,8 @@ fn ec_point_to_bytes33(pt: *const bssl_sys::EC_POINT) -> [u8; 33] {
 
 impl core::ops::Add<BsslPoint> for BsslPoint {
     type Output = BsslPoint;
+
+    /// Constant-time assuming neither inputs nor output are the point at infinity.
     fn add(self, rhs: BsslPoint) -> BsslPoint {
         let group = p256_group();
         let a = ec_point_from_bytes(&self.0);
@@ -365,6 +433,8 @@ impl core::ops::Add<&BsslPoint> for BsslPoint {
 
 impl core::ops::Sub<BsslPoint> for BsslPoint {
     type Output = BsslPoint;
+
+    /// Constant-time assuming neither inputs nor output are the point at infinity.
     fn sub(self, rhs: BsslPoint) -> BsslPoint {
         let group = p256_group();
         let a = ec_point_from_bytes(&self.0);
@@ -396,6 +466,9 @@ impl core::ops::Sub<BsslPoint> for BsslPoint {
 
 impl core::ops::Mul<BsslScalar> for BsslPoint {
     type Output = BsslPoint;
+
+    /// Constant-time in both the scalar and the point, assuming neither `self` nor the output
+    /// are the point at infinity.
     fn mul(self, rhs: BsslScalar) -> BsslPoint {
         let group = p256_group();
         let pt = ec_point_from_bytes(&self.0);
@@ -463,6 +536,7 @@ pub fn point_generator() -> BsslPoint {
     BsslPoint(ec_point_to_bytes33(generator))
 }
 
+/// Not constant-time, but operates only on untrusted public input.
 pub fn decode_point(input: &[u8]) -> (CtOption<BsslPoint>, &[u8]) {
     if input.len() < 33 {
         return (CtOption::new(BsslPoint([0u8; 33]), Choice::from(0u8)), input);
@@ -498,6 +572,8 @@ fn p256_order_bytes() -> &'static [u8; SCALAR_SIZE] {
     ORDER.get_or_init(|| bn_to_bytes32(p256_order()))
 }
 
+/// Not constant-time (the `<` comparison short-circuits), but operates only on untrusted
+/// public input.
 pub fn decode_scalar(input: &[u8]) -> (CtOption<BsslScalar>, &[u8]) {
     if input.len() < SCALAR_SIZE {
         return (CtOption::new(BsslScalar([0u8; SCALAR_SIZE]), Choice::from(0u8)), input);
