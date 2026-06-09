@@ -15,6 +15,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_protobuf//:timestamp_cc_proto",
     ],
 )
 
@@ -29,6 +30,7 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
+        "@com_google_protobuf//:timestamp_cc_proto",
     ],
 )
 

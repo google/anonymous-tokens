@@ -15,6 +15,7 @@
 #ifndef ANONYMOUS_TOKENS_CPP_SHARED_PROTO_UTILS_H_
 #define ANONYMOUS_TOKENS_CPP_SHARED_PROTO_UTILS_H_
 
+#include "google/protobuf/timestamp.pb.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -26,18 +27,18 @@ namespace anonymous_tokens {
 absl::StatusOr<AnonymousTokensUseCase> ParseUseCase(
     absl::string_view use_case);
 
-// Takes in Timestamp and converts it to absl::Time.
+// Takes in google::protobuf::Timestamp and converts it to absl::Time.
 //
 // Timestamp is defined here:
 // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#timestamp
 absl::StatusOr<absl::Time> TimeFromProto(
-    const Timestamp& proto);
+    const google::protobuf::Timestamp& proto);
 
-// Takes in absl::Time and converts it to Timestamp.
+// Takes in absl::Time and converts it to google::protobuf::Timestamp.
 //
 // Timestamp is defined here:
 // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#timestamp
-absl::StatusOr<Timestamp> TimeToProto(
+absl::StatusOr<google::protobuf::Timestamp> TimeToProto(
     absl::Time time);
 
 }  // namespace anonymous_tokens

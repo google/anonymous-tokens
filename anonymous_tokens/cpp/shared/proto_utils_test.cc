@@ -14,6 +14,7 @@
 
 #include "anonymous_tokens/cpp/shared/proto_utils.h"
 
+#include "google/protobuf/timestamp.pb.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
@@ -48,7 +49,7 @@ TEST(ProtoUtilsTest, ValidUseCase) {
 }
 
 TEST(ProtoUtilsTest, TimeFromProtoGood) {
-  Timestamp timestamp;
+  google::protobuf::Timestamp timestamp;
   timestamp.set_seconds(1234567890);
   timestamp.set_nanos(12345);
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(absl::Time time, TimeFromProto(timestamp));
@@ -56,7 +57,7 @@ TEST(ProtoUtilsTest, TimeFromProtoGood) {
 }
 
 TEST(ProtoUtilsTest, TimeFromProtoBad) {
-  Timestamp proto;
+  google::protobuf::Timestamp proto;
   proto.set_nanos(-1);
   EXPECT_THAT(TimeFromProto(proto).status().code(),
               absl::StatusCode::kInvalidArgument);
@@ -68,7 +69,7 @@ TEST(ProtoUtilsTest, TimeFromProtoBad) {
 }
 
 TEST(ProtoUtilsTest, TimeToProtoGood) {
-  Timestamp proto;
+  google::protobuf::Timestamp proto;
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       proto, TimeToProto(absl::FromUnixSeconds(1596762373)));
   EXPECT_EQ(proto.seconds(), 1596762373);
@@ -81,7 +82,7 @@ TEST(ProtoUtilsTest, TimeToProtoGood) {
 }
 
 TEST(ProtoUtilsTest, TimeToProtoBad) {
-  absl::StatusOr<Timestamp> proto;
+  absl::StatusOr<google::protobuf::Timestamp> proto;
   proto = TimeToProto(absl::FromUnixSeconds(253402300800));
   EXPECT_THAT(proto.status().code(), absl::StatusCode::kInvalidArgument);
 }

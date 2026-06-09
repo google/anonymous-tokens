@@ -34,7 +34,7 @@ absl::StatusOr<AnonymousTokensUseCase> ParseUseCase(
 }
 
 absl::StatusOr<absl::Time> TimeFromProto(
-    const Timestamp& proto) {
+    const google::protobuf::Timestamp& proto) {
   const auto sec = proto.seconds();
   const auto ns = proto.nanos();
   // sec must be [0001-01-01T00:00:00Z, 9999-12-31T23:59:59.999999999Z]
@@ -48,8 +48,8 @@ absl::StatusOr<absl::Time> TimeFromProto(
          absl::Nanoseconds(proto.nanos());
 }
 
-absl::StatusOr<Timestamp> TimeToProto(absl::Time time) {
-  Timestamp proto;
+absl::StatusOr<google::protobuf::Timestamp> TimeToProto(absl::Time time) {
+  google::protobuf::Timestamp proto;
   const int64_t seconds = absl::ToUnixSeconds(time);
   proto.set_seconds(seconds);
   proto.set_nanos((time - absl::FromUnixSeconds(seconds)) /

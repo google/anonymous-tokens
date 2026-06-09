@@ -10,6 +10,9 @@ package(default_visibility = ["//visibility:public"])
 proto_library(
     name = "anonymous_tokens_proto",
     srcs = ["anonymous_tokens.proto"],
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(

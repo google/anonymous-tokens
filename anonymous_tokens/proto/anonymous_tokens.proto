@@ -17,13 +17,10 @@ syntax = "proto3";
 
 package anonymous_tokens;
 
+import "google/protobuf/timestamp.proto";
+
 option java_multiple_files = true;
 option java_package = "com.google.privacy.privatemembership.anonymoustokens.proto";
-
-message Timestamp {
- int64 seconds = 1;
- int32 nanos = 2;
-}
 
 // Different use cases for the Anonymous Tokens service.
 // Next ID: 20
@@ -158,10 +155,10 @@ message RSABlindSignaturePublicKey {
   // Timestamp of expiration.
   //
   // Note that we will not return keys whose expiration times are in the past.
-  Timestamp expiration_time = 3;
+  google.protobuf.Timestamp expiration_time = 3;
 
   // Key becomes valid at key_validity_start_time.
-  Timestamp key_validity_start_time = 8;
+  google.protobuf.Timestamp key_validity_start_time = 8;
 
   // Hash function used in computing hash of the signing message
   // (see https://tools.ietf.org/html/rfc8017#section-9.1.1)
@@ -228,12 +225,12 @@ message ATHMPrivacyPassPublicKey {
   bytes deployment_id = 8;
 
   // Key becomes valid at key_validity_start_time.
-  Timestamp key_validity_start_time = 3;
+  google.protobuf.Timestamp key_validity_start_time = 3;
 
   // Timestamp of expiration.
   //
   // Note that we will not return keys whose expiration times are in the past.
-  Timestamp expiration_time = 4;
+  google.protobuf.Timestamp expiration_time = 4;
 }
 
 // Next ID: 5
@@ -257,7 +254,7 @@ message AnonymousTokensPublicKeysGetRequest {
   // requested key_validity_start_time.
   //
   // If unset it will be set to current time.
-  Timestamp key_validity_start_time = 3
+  google.protobuf.Timestamp key_validity_start_time = 3
       ;
 
   // Public key that is definitely not valid after this particular time. If
@@ -265,7 +262,7 @@ message AnonymousTokensPublicKeysGetRequest {
   //
   // Note: It is possible that the key becomes invalid before this time. But the
   // key should not be valid after this time.
-  Timestamp key_validity_end_time = 4
+  google.protobuf.Timestamp key_validity_end_time = 4
       ;
 }
 
@@ -371,7 +368,7 @@ message AnonymousTokensSignResponse {
     // have the key to create the final token from the serialized_token. Even if
     // the client has the key, the server will not redeem the newly created
     // token created using expired key.
-    Timestamp key_expiration_time = 7;
+    google.protobuf.Timestamp key_expiration_time = 7;
   }
 
   //  Next ID: 5
@@ -397,7 +394,7 @@ message AnonymousTokensSignResponse {
     // have the key to create the token from the token response. Even if the
     // client has the key, the server will not redeem the newly created token
     // created using expired key.
-    Timestamp key_expiration_time = 4;
+    google.protobuf.Timestamp key_expiration_time = 4;
   }
 
   // Returned anonymous token(s)
