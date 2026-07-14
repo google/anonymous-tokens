@@ -107,10 +107,10 @@ impl AthmBackend for RustCryptoBackend {
     }
 
     fn random_scalar() -> Self::Scalar {
-        RustCryptoScalar::random(&mut rand::thread_rng())
+        RustCryptoScalar::random(&mut rand::rng())
     }
 
     fn random_non_zero_scalar() -> Self::Scalar {
-        *NonZeroScalar::random(&mut rand::thread_rng()).as_ref()
+        *NonZeroScalar::random(&mut rand::rng()).as_ref()
     }
 }

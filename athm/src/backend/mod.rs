@@ -43,7 +43,7 @@ mod cross_backend_test;
 ///
 /// Random generation is handled internally by each backend:
 /// - The `boringssl` backend uses BoringSSL's built-in CSPRNG.
-/// - The `rustcrypto` backend uses `rand::thread_rng()`.
+/// - The `rustcrypto` backend uses `rand::rng()`.
 pub trait AthmBackend: 'static + Sized {
     /// Scalar type (element of the P-256 scalar field).
     type Scalar: Copy

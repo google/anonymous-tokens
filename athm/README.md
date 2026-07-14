@@ -38,7 +38,7 @@ use athm::*;
 
 // Setup with 4 metadata buckets (e.g., risk levels 0-3)
 let params = Params::new(4, b"deployment_id".to_vec()).unwrap();
-let mut rng = rand::thread_rng();
+let mut rng = rand::rng();
 let (private_key, public_key, proof) = key_gen(&params, &mut rng);
 
 // Client creates blinded request
