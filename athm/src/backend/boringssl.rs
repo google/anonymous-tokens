@@ -268,12 +268,12 @@ fn p256_order_minus_2() -> &'static [u8; SCALAR_SIZE] {
     use std::sync::OnceLock;
     static ORDER_M2: OnceLock<[u8; SCALAR_SIZE]> = OnceLock::new();
     ORDER_M2.get_or_init(|| {
-        let order = p256_order();
-        let two = BnWrapper::from_bytes(&[2u8]);
         let result = BnWrapper::new();
-        // SAFETY: result, order, and two are valid BIGNUM pointers, and order > 2.
-        let rc =
-            unsafe { bssl_sys::BN_mod_sub_quick(result.as_mut_ptr(), order, two.as_ptr(), order) };
+        // SAFETY: result.as_mut_ptr() and p256_order() are valid BIGNUM pointers.
+        let rc = unsafe { bssl_sys::BN_copy(result.as_mut_ptr(), p256_order()) };
+        assert!(!rc.is_null());
+        // SAFETY: result.as_mut_ptr() is a valid BIGNUM pointer.
+        let rc = unsafe { bssl_sys::BN_sub_word(result.as_mut_ptr(), 2) };
         assert_eq!(rc, 1);
         result.to_bytes32()
     })
@@ -319,12 +319,14 @@ fn bn_mod_mul_mont(a: &[u8; SCALAR_SIZE], b: &[u8; SCALAR_SIZE]) -> [u8; SCALAR_
     let bn_a = BnWrapper::from_bytes(a);
     let bn_b = BnWrapper::from_bytes(b);
     let mont_a = BnWrapper::new();
-    let mont_b = BnWrapper::new();
     let bn_r = BnWrapper::new();
     let ctx = BnCtxWrapper::new();
     let mont = p256_order_mont_ctx();
 
-    // Convert both operands to Montgomery form.
+    // Compute a * b = MulMont(ToMont(a), b). This saves two montgomery reductions compared to computing
+    // FromMont(MulMont(ToMont(a), ToMont(b))).
+
+    // Convert a to Montgomery form.
     // SAFETY: All BIGNUM and MONT_CTX pointers are valid.
     let rc = unsafe {
         bssl_sys::BN_to_montgomery(
@@ -335,9 +337,13 @@ fn bn_mod_mul_mont(a: &[u8; SCALAR_SIZE], b: &[u8; SCALAR_SIZE]) -> [u8; SCALAR_
         )
     };
     assert_eq!(rc, 1);
+
+    // Multiply in Montgomery domain (constant-time).
+    // SAFETY: All pointers are valid.
     let rc = unsafe {
-        bssl_sys::BN_to_montgomery(
-            mont_b.as_mut_ptr(),
+        bssl_sys::BN_mod_mul_montgomery(
+            bn_r.as_mut_ptr(),
+            mont_a.as_ptr(),
             bn_b.as_ptr(),
             mont.as_ptr(),
             ctx.as_mut_ptr(),
@@ -345,33 +351,7 @@ fn bn_mod_mul_mont(a: &[u8; SCALAR_SIZE], b: &[u8; SCALAR_SIZE]) -> [u8; SCALAR_
     };
     assert_eq!(rc, 1);
 
-    // Multiply in Montgomery domain (constant-time).
-    // SAFETY: mont_a and mont_b are in Montgomery form, all pointers are valid.
-    let rc = unsafe {
-        bssl_sys::BN_mod_mul_montgomery(
-            bn_r.as_mut_ptr(),
-            mont_a.as_ptr(),
-            mont_b.as_ptr(),
-            mont.as_ptr(),
-            ctx.as_mut_ptr(),
-        )
-    };
-    assert_eq!(rc, 1);
-
-    // Convert result back from Montgomery form.
-    // SAFETY: bn_r is in Montgomery form, all pointers are valid.
-    let result = BnWrapper::new();
-    let rc = unsafe {
-        bssl_sys::BN_from_montgomery(
-            result.as_mut_ptr(),
-            bn_r.as_ptr(),
-            mont.as_ptr(),
-            ctx.as_mut_ptr(),
-        )
-    };
-    assert_eq!(rc, 1);
-
-    result.to_bytes32()
+    bn_r.to_bytes32()
     // All BnWrappers and BnCtxWrapper freed automatically on drop.
 }
 
