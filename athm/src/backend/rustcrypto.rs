@@ -19,12 +19,13 @@
 //! `elliptic-curve` ecosystem.
 
 use super::AthmBackend;
-use elliptic_curve::generic_array::typenum::Unsigned;
-use elliptic_curve::hash2curve::{ExpandMsgXmd, GroupDigest};
+use elliptic_curve::array::typenum::Unsigned;
+use elliptic_curve::Generate;
+use hash2curve::{ExpandMsgXmd, GroupDigest};
 use p256::elliptic_curve::{
     group::GroupEncoding,
     sec1::ModulusSize,
-    subtle::{Choice, ConstantTimeEq, CtOption},
+    subtle::{Choice, CtOption},
     Field, FieldBytes, FieldBytesSize, Group, PrimeField,
 };
 use p256::{NistP256, NonZeroScalar};
@@ -78,13 +79,16 @@ impl AthmBackend for RustCryptoBackend {
     }
 
     fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Point, &'static str> {
-        NistP256::hash_from_bytes::<ExpandMsgXmd<sha2::Sha256>>(msgs, dsts)
-            .map_err(|_| "hash_to_point failed")
+        NistP256::hash_from_bytes(msgs, dsts).map_err(|_| "hash_to_point failed")
     }
 
     fn hash_to_scalar(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Scalar, &'static str> {
-        NistP256::hash_to_scalar::<ExpandMsgXmd<sha2::Sha256>>(msgs, dsts)
-            .map_err(|_| "hash_to_scalar failed")
+        hash2curve::hash_to_scalar::<
+            NistP256,
+            ExpandMsgXmd<sha2::Sha256>,
+            elliptic_curve::consts::U48,
+        >(msgs, dsts)
+        .map_err(|_| "hash_to_scalar failed")
     }
 
     fn encode_scalar(scalar: &Self::Scalar, out: &mut Vec<u8>) {
@@ -92,10 +96,8 @@ impl AthmBackend for RustCryptoBackend {
     }
 
     fn decode_scalar(input: &[u8]) -> (CtOption<Self::Scalar>, &[u8]) {
-        (
-            RustCryptoScalar::from_repr(*FieldBytes::<NistP256>::from_slice(&input[..SCALAR_SIZE])),
-            &input[SCALAR_SIZE..],
-        )
+        let bytes = FieldBytes::<NistP256>::try_from(&input[..SCALAR_SIZE]).unwrap();
+        (RustCryptoScalar::from_repr(bytes), &input[SCALAR_SIZE..])
     }
 
     fn encode_point(point: &Self::Point, out: &mut Vec<u8>) {
@@ -103,14 +105,17 @@ impl AthmBackend for RustCryptoBackend {
     }
 
     fn decode_point(input: &[u8]) -> (CtOption<Self::Point>, &[u8]) {
-        (RustCryptoPoint::from_bytes((&input[..POINT_SIZE]).into()), &input[POINT_SIZE..])
+        let bytes =
+            elliptic_curve::sec1::CompressedPoint::<NistP256>::try_from(&input[..POINT_SIZE])
+                .unwrap();
+        (RustCryptoPoint::from_bytes(&bytes), &input[POINT_SIZE..])
     }
 
     fn random_scalar() -> Self::Scalar {
-        RustCryptoScalar::random(&mut rand::thread_rng())
+        RustCryptoScalar::generate()
     }
 
     fn random_non_zero_scalar() -> Self::Scalar {
-        *NonZeroScalar::random(&mut rand::thread_rng()).as_ref()
+        *NonZeroScalar::generate().as_ref()
     }
 }
