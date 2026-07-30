@@ -19,7 +19,7 @@
 
 use super::AthmBackend;
 use core::ptr::{null, null_mut, NonNull};
-use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeLess, CtOption};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use zeroize::Zeroize;
 
 pub const SCALAR_SIZE: usize = 32;

@@ -548,10 +548,6 @@ impl Encodable for IssuanceProof {
 }
 
 impl IssuanceProof {
-    fn encoded_size(params: &Params) -> usize {
-        Self::encoded_size_for_buckets(params.n_buckets)
-    }
-
     pub fn decode<'a>(input: &'a [u8], params: &Params) -> Result<Self, &'static str> {
         Self::decode_generic(input, params.n_buckets)
     }
@@ -627,9 +623,6 @@ impl Encodable for TokenResponse {
 }
 
 impl TokenResponse {
-    fn encoded_size(params: &Params) -> usize {
-        Self::encoded_size_for_buckets(params.n_buckets)
-    }
     pub fn decode<'a>(input: &'a [u8], params: &Params) -> Result<Self, &'static str> {
         Self::decode_generic(input, params.n_buckets)
     }
