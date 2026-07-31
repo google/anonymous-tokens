@@ -654,6 +654,12 @@ impl<B: AthmBackend> GenericToken<B> {
         B::encode_point(&self.big_q, out);
     }
 
+    pub fn nonce(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(B::SCALAR_SIZE);
+        B::encode_scalar(&self.t, &mut out);
+        out
+    }
+
     pub fn decode_generic<'a>(input: &'a [u8]) -> Result<Self, &'static str> {
         if input.len() < Self::encoded_size() {
             return Err(INPUT_TOO_SHORT);
@@ -1455,6 +1461,11 @@ mod tests {
         let token =
             finalize_token(&context, &server_public_key, &token_req, &response, &params).unwrap();
 
+        let mut expected_nonce = Vec::with_capacity(32);
+        DefaultBackend::encode_scalar(&token.t, &mut expected_nonce);
+        assert_eq!(token.nonce(), expected_nonce);
+        assert_eq!(token.nonce().len(), 32);
+
         // Server verifies the token and recovers the metadata
         let recovered_metadata = verify_token(&server_private_key, &token, &params).unwrap();
         assert_eq!(recovered_metadata, hidden_metadata);
@@ -1476,6 +1487,49 @@ mod tests {
             let recovered = verify_token(&server_private_key, &token, &params).unwrap();
             assert_eq!(recovered, metadata);
         });
+    }
+
+    #[test]
+    fn test_token_malleability_same_nonce() {
+        let params = gen_test_params();
+
+        let (server_private_key, server_public_key, proof) = key_gen(&params);
+
+        let hidden_metadata: u8 = 2;
+        let (context, token_req) = token_request(&server_public_key, &proof, &params).unwrap();
+        let response = token_response(
+            &server_private_key,
+            &server_public_key,
+            &token_req,
+            hidden_metadata,
+            &params,
+        )
+        .unwrap();
+
+        let token =
+            finalize_token(&context, &server_public_key, &token_req, &response, &params).unwrap();
+
+        let recovered_metadata = verify_token(&server_private_key, &token, &params).unwrap();
+        assert_eq!(recovered_metadata, hidden_metadata);
+
+        // Exercise token malleability: multiply big_p and big_q by the same scalar k.
+        let k = test_random_scalar();
+        let malleated_token = Token { t: token.t, big_p: token.big_p * k, big_q: token.big_q * k };
+
+        // 1. They still validate and recover the same metadata.
+        let malleated_metadata =
+            verify_token(&server_private_key, &malleated_token, &params).unwrap();
+        assert_eq!(malleated_metadata, hidden_metadata);
+
+        // 2. They don't equal each other (serialized representations differ).
+        let mut original_encoded = Vec::new();
+        token.encode(&mut original_encoded);
+        let mut malleated_encoded = Vec::new();
+        malleated_token.encode(&mut malleated_encoded);
+        assert_ne!(original_encoded, malleated_encoded);
+
+        // 3. But they still have the exact same nonce.
+        assert_eq!(token.nonce(), malleated_token.nonce());
     }
 
     #[test]
