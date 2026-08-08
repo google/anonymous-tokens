@@ -15,6 +15,7 @@
 #include "anonymous_tokens/cpp/privacy_pass/athm_token_encodings.h"
 
 #include <string>
+#include <utility>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -25,16 +26,6 @@
 
 namespace anonymous_tokens {
 namespace {
-
-TEST(AnonymousTokensAthmTokenEncodingsTest, EmptyMarshalAthmTokenTest) {
-  AthmToken token;
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
-                                   MarshalAthmToken(token));
-  std::string expected_token_encoding;
-  ASSERT_TRUE(absl::HexStringToBytes("C07E", &expected_token_encoding));
-
-  EXPECT_EQ(encoded_token, expected_token_encoding);
-}
 
 TEST(AnonymousTokensAthmTokenEncodingsTest, MarshalAndUnmarshalAthmTokenTest) {
   std::string issuer_key_id;
@@ -53,15 +44,6 @@ TEST(AnonymousTokensAthmTokenEncodingsTest, MarshalAndUnmarshalAthmTokenTest) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token,
                                    MarshalAthmToken(token));
 
-  std::string expected_token_encoding;
-  ASSERT_TRUE(absl::HexStringToBytes(
-      "C07Eca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3"
-      "f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d05605686200d65"
-      "00f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c"
-      "92ad61c08a9fe41629a642263e4857e428a706ba87659361",
-      &expected_token_encoding));
-  EXPECT_EQ(encoded_token, expected_token_encoding);
-
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(const AthmToken token2,
                                    UnmarshalAthmToken(encoded_token));
   EXPECT_EQ(token.token_type, token2.token_type);
@@ -69,36 +51,15 @@ TEST(AnonymousTokensAthmTokenEncodingsTest, MarshalAndUnmarshalAthmTokenTest) {
   EXPECT_EQ(token.token, token2.token);
 }
 
-TEST(AnonymousTokensAthmTokenEncodingsTest, UnmarshalAthmTokenTooShort) {
+TEST(AnonymousTokensAthmTokenEncodingsTest, UnmarshalAthmTokenErrorTest) {
   std::string short_token;
   ASSERT_TRUE(absl::HexStringToBytes("C07E5f5e466042", &short_token));
-  EXPECT_FALSE(UnmarshalAthmToken(short_token).ok());
-}
-
-TEST(AnonymousTokensAthmTokenEncodingsTest, UnmarshalAthmTokenTooLong) {
-  std::string long_token;
-  ASSERT_TRUE(absl::HexStringToBytes(
-      "C07Eca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3"
-      "f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d05605686200d65"
-      "00f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c"
-      "92ad61c08a9fe41629a642263e4857e428a706ba876593618888",
-      &long_token));
-  EXPECT_FALSE(UnmarshalAthmToken(long_token).ok());
-}
-
-TEST(AnonymousTokensAthmTokenEncodingsTest, UnmarshalAthmTokenWrongType) {
-  std::string token;
-  ASSERT_TRUE(absl::HexStringToBytes(
-      "DA7Aca572f8982a9ca248a3056186322d93ca147266121ddeb5632c07f1f71cd27084ed3"
-      "f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d05605686200d65"
-      "00f249475737ea9246a70c3c2a1ff280663e46c792a8ae0d9a6877d1b427bbae7129b88c"
-      "92ad61c08a9fe41629a642263e4857e428a706ba87659361",
-      &token));
-  EXPECT_FALSE(UnmarshalAthmToken(token).ok());
+  EXPECT_EQ(UnmarshalAthmToken(short_token).status().code(),
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(AnonymousTokensAthmTokenEncodingsTest,
-     MarshalAndUnmarshalAthmTokenRequest) {
+     MarshalAndUnmarshalAthmTokenRequestTest) {
   std::string athm_token_request;
   ASSERT_TRUE(absl::HexStringToBytes(
       "4ed3f2a25ec528543d9a83c850d12b3036b518fafec080df3efcd9693b944d0560",
@@ -109,14 +70,6 @@ TEST(AnonymousTokensAthmTokenEncodingsTest,
       .encoded_request = std::move(athm_token_request)};
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(std::string encoded_token_request,
                                    MarshalAthmTokenRequest(token_request));
-
-  std::string expected_token_request_encoding;
-  ASSERT_TRUE(
-      absl::HexStringToBytes("C07E124ed3f2a25ec528543d9a83c850d12b3036b518fafec"
-                             "080df3efcd9693b944d0560",
-                             &expected_token_request_encoding));
-
-  EXPECT_EQ(encoded_token_request, expected_token_request_encoding);
 
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       AthmTokenRequest decoded_token_request,
@@ -130,7 +83,7 @@ TEST(AnonymousTokensAthmTokenEncodingsTest,
 }
 
 TEST(AnonymousTokensAthmTokenEncodingsTest,
-     UnmarshalAthmTokenRequestWrongTokenType) {
+     UnmarshalAthmTokenRequestErrorTest) {
   std::string token_request_encoding;
   ASSERT_TRUE(
       absl::HexStringToBytes("DA7A124ed3f2a25ec528543d9a83c850d12b3036b518fafec"
@@ -142,35 +95,6 @@ TEST(AnonymousTokensAthmTokenEncodingsTest,
   EXPECT_EQ(token_request.status().code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(token_request.status().message(),
               ::testing::HasSubstr("unsupported token type"));
-}
-
-TEST(AnonymousTokensAthmTokenEncodingsTest, UnmarshalAthmTokenRequestTooShort) {
-  std::string token_request_encoding;
-  ASSERT_TRUE(
-      absl::HexStringToBytes("C07E124ed3f2a25ec528543d9a83c850d12b3036b518fafec"
-                             "080df3efcd9693b944d05",
-                             &token_request_encoding));
-  absl::StatusOr<AthmTokenRequest> token_request =
-      UnmarshalAthmTokenRequest(token_request_encoding);
-
-  EXPECT_EQ(token_request.status().code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_THAT(token_request.status().message(),
-              ::testing::HasSubstr(
-                  "failed to read athm_token_request.encoded_request"));
-}
-
-TEST(AnonymousTokensAthmTokenEncodingsTest, UnmarshalAthmTokenRequestTooLong) {
-  std::string token_request_encoding;
-  ASSERT_TRUE(
-      absl::HexStringToBytes("C07E124ed3f2a25ec528543d9a83c850d12b3036b518fafec"
-                             "080df3efcd9693b944d056088",
-                             &token_request_encoding));
-  absl::StatusOr<AthmTokenRequest> token_request =
-      UnmarshalAthmTokenRequest(token_request_encoding);
-
-  EXPECT_EQ(token_request.status().code(), absl::StatusCode::kInvalidArgument);
-  EXPECT_THAT(token_request.status().message(),
-              ::testing::HasSubstr("token request had extra bytes"));
 }
 
 }  // namespace

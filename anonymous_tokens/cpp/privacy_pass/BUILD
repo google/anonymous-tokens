@@ -113,6 +113,36 @@ cc_test(
 )
 
 cc_library(
+    name = "athm_token_encodings_utils",
+    srcs = [
+        "athm_token_encodings_utils.cc",
+    ],
+    hdrs = [
+        "athm_token_encodings_utils.h",
+    ],
+    deps = [
+        "//anonymous_tokens/cpp/shared:status_utils",
+        "@boringssl//:ssl",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "athm_token_encodings_utils_test",
+    srcs = [
+        "athm_token_encodings_utils_test.cc",
+    ],
+    deps = [
+        ":athm_token_encodings_utils",
+        "//anonymous_tokens/cpp/testing:utils",
+        "@com_github_google_googletest//:gtest_main",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "athm_token_encodings",
     srcs = [
         "athm_token_encodings.cc",
@@ -121,6 +151,8 @@ cc_library(
         "athm_token_encodings.h",
     ],
     deps = [
+        ":athm_token_encodings_utils",
+        "//anonymous_tokens/cpp/shared:status_utils",
         "@boringssl//:ssl",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
