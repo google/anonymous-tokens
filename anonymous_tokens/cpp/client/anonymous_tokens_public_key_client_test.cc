@@ -98,12 +98,12 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
   // Create the first request.
   ASSERT_TRUE(client_
                   ->CreateAnonymousTokensPublicKeysGetRequest(
-                      TEST_USE_CASE, 1, absl::Now(), absl::nullopt)
+                      TEST_USE_CASE, 1, absl::Now(), std::nullopt)
                   .ok());
   // Second request will err.
   absl::StatusOr<AnonymousTokensPublicKeysGetRequest> request =
       client_->CreateAnonymousTokensPublicKeysGetRequest(
-          TEST_USE_CASE, 1, absl::Now(), absl::nullopt);
+          TEST_USE_CASE, 1, absl::Now(), std::nullopt);
   EXPECT_EQ(request.status().code(), absl::StatusCode::kFailedPrecondition);
   EXPECT_THAT(request.status().message(),
               testing::HasSubstr("Public Key request is already created."));
@@ -113,7 +113,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        PublicKeyGetClientInvalidUseCaseRequest) {
   absl::StatusOr<AnonymousTokensPublicKeysGetRequest> request =
       client_->CreateAnonymousTokensPublicKeysGetRequest(
-          ANONYMOUS_TOKENS_USE_CASE_UNDEFINED, 0, absl::Now(), absl::nullopt);
+          ANONYMOUS_TOKENS_USE_CASE_UNDEFINED, 0, absl::Now(), std::nullopt);
   EXPECT_EQ(request.status().code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(request.status().message(),
               testing::HasSubstr("Use case must be defined."));
@@ -123,7 +123,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        PublicKeyGetClientInvalidKeyVersionRequest) {
   absl::StatusOr<AnonymousTokensPublicKeysGetRequest> request =
       client_->CreateAnonymousTokensPublicKeysGetRequest(
-          TEST_USE_CASE, -1, absl::Now(), absl::nullopt);
+          TEST_USE_CASE, -1, absl::Now(), std::nullopt);
   EXPECT_EQ(request.status().code(), absl::StatusCode::kInvalidArgument);
   EXPECT_THAT(
       request.status().message(),
@@ -180,7 +180,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        CreateAnonymousTokensPublicKeysGetRequestWithNoExpiryTime) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       auto request, client_->CreateAnonymousTokensPublicKeysGetRequest(
-                        TEST_USE_CASE, 0, start_time_, absl::nullopt));
+                        TEST_USE_CASE, 0, start_time_, std::nullopt));
 
   EXPECT_EQ(request.use_case(), AnonymousTokensUseCase_Name(TEST_USE_CASE));
   EXPECT_EQ(request.key_version(), 0u);
@@ -524,7 +524,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        KeyWithExpirationTimeReturnedButIndefinitelyValidKeyWasRequested) {
   ASSERT_TRUE(client_
                   ->CreateAnonymousTokensPublicKeysGetRequest(
-                      TEST_USE_CASE, 0, start_time_, absl::nullopt)
+                      TEST_USE_CASE, 0, start_time_, std::nullopt)
                   .ok());
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto response, SimpleGetResponse());
 
@@ -659,7 +659,7 @@ TEST_F(AnonymousTokensPublicKeysGetClientTest,
        ProcessPublicKeyGetResponseNoExpiry) {
   ASSERT_TRUE(client_
                   ->CreateAnonymousTokensPublicKeysGetRequest(
-                      TEST_USE_CASE, 1, start_time_, absl::nullopt)
+                      TEST_USE_CASE, 1, start_time_, std::nullopt)
                   .ok());
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto single_key_resp, SimpleGetResponse());
   single_key_resp.mutable_rsa_public_keys(0)->clear_expiration_time();

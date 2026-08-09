@@ -135,7 +135,7 @@ absl::Status ValidityChecksForResponseProcessing(
     // an expiry time should not be returned.
     return absl::InvalidArgumentError("Public Key is not indefinitely valid");
   }
-  absl::optional<absl::Time> public_key_expiry_time = absl::nullopt;
+  absl::optional<absl::Time> public_key_expiry_time = std::nullopt;
   if (public_key_request.has_key_validity_end_time() &&
       public_key.has_expiration_time()) {
     ANON_TOKENS_ASSIGN_OR_RETURN(

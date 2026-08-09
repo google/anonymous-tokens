@@ -16,145 +16,38 @@
 
 #include <string>
 
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include <openssl/base.h>
-#include <openssl/bytestring.h>
-#include <openssl/mem.h>
+#include "anonymous_tokens/cpp/privacy_pass/athm_token_encodings_utils.h"
+#include "anonymous_tokens/cpp/shared/status_utils.h"
 
 namespace anonymous_tokens {
 
 absl::StatusOr<std::string> MarshalAthmToken(const AthmToken& token) {
-  // Main CryptoByteBuilder object cbb which will be passed to CBB_finish to
-  // finalize the output string.
-  bssl::ScopedCBB cbb;
-  // initial_capacity only serves as a hint.
-  if (!CBB_init(cbb.get(), /*initial_capacity=*/kAthmTokenTypeSizeInBytes2 +
-                               kAthmIssuerKeyIdSizeInBytes32 +
-                               kAthmTokenSizeInBytes98)) {
-    return absl::InternalError("CBB_init() failed.");
-  }
-  // Add token_type to cbb.
-  if (!CBB_add_u16(cbb.get(), token.token_type) ||
-      // Add issuer_key_id to cbb.
-      !CBB_add_bytes(
-          cbb.get(),
-          reinterpret_cast<const uint8_t*>(token.issuer_key_id.data()),
-          token.issuer_key_id.size()) ||
-      // Add token to cbb.
-      !CBB_add_bytes(cbb.get(),
-                     reinterpret_cast<const uint8_t*>(token.token.data()),
-                     token.token.size())) {
-    return absl::InvalidArgumentError(
-        "Could not construct cbb with given inputs.");
-  }
-  uint8_t* encoded_output;
-  size_t encoded_output_len;
-  if (!CBB_finish(cbb.get(), &encoded_output, &encoded_output_len)) {
-    return absl::InvalidArgumentError(
-        "Failed to generate token / token input encoding");
-  }
-  std::string encoded_output_str(reinterpret_cast<const char*>(encoded_output),
-                                 encoded_output_len);
-  // Free memory.
-  OPENSSL_free(encoded_output);
-  return encoded_output_str;
+  std::string encoded_token;
+  ANON_TOKENS_RETURN_IF_ERROR(MarshalAthmToken(token, &encoded_token));
+  return encoded_token;
 }
 
 absl::StatusOr<AthmToken> UnmarshalAthmToken(absl::string_view athm_token_str) {
   AthmToken out;
-  out.issuer_key_id.resize(kAthmIssuerKeyIdSizeInBytes32);
-  out.token.resize(kAthmTokenSizeInBytes98);
-
-  CBS cbs;
-  CBS_init(&cbs, reinterpret_cast<const uint8_t*>(athm_token_str.data()),
-           athm_token_str.size());
-  if (!CBS_get_u16(&cbs, &out.token_type)) {
-    return absl::InvalidArgumentError("failed to read token type");
-  }
-  if (out.token_type != 0xC07E) {
-    return absl::InvalidArgumentError("unsupported token type");
-  }
-  if (!CBS_copy_bytes(&cbs,
-                      reinterpret_cast<uint8_t*>(out.issuer_key_id.data()),
-                      out.issuer_key_id.size())) {
-    return absl::InvalidArgumentError("failed to read issuer_key_id");
-  }
-  if (!CBS_copy_bytes(&cbs, reinterpret_cast<uint8_t*>(out.token.data()),
-                      out.token.size())) {
-    return absl::InvalidArgumentError("failed to read token");
-  }
-  if (CBS_len(&cbs) != 0) {
-    return absl::InvalidArgumentError("token had extra bytes");
-  }
+  ANON_TOKENS_RETURN_IF_ERROR(UnmarshalAthmToken(athm_token_str, &out));
   return out;
 }
 
 absl::StatusOr<std::string> MarshalAthmTokenRequest(
     const AthmTokenRequest& athm_token_request) {
-  // Main CryptoByteBuilder object cbb which will be passed to CBB_finish to
-  // finalize the output string.
-  bssl::ScopedCBB cbb;
-  // initial_capacity only serves as a hint.
-  if (!CBB_init(cbb.get(),
-                /*initial_capacity=*/kAthmTokenTypeSizeInBytes2 +
-                    kAthmTruncatedIssuerKeyIdSizeInBytes1 +
-                    kAthmEncodedRequestSizeInBytes33)) {
-    return absl::InternalError("CBB_init() failed.");
-  }
-  // Add token_type to cbb.
-  if (!CBB_add_u16(cbb.get(), athm_token_request.token_type) ||
-      // Add truncated_token_key_id to cbb.
-      !CBB_add_u8(cbb.get(), athm_token_request.truncated_issuer_key_id) ||
-      // Add blinded_token_request string to cbb.
-      !CBB_add_bytes(cbb.get(),
-                     reinterpret_cast<const uint8_t*>(
-                         athm_token_request.encoded_request.data()),
-                     athm_token_request.encoded_request.size())) {
-    return absl::InvalidArgumentError(
-        "Could not construct cbb with given inputs.");
-  }
-
-  uint8_t* encoded_output;
-  size_t encoded_output_len;
-  if (!CBB_finish(cbb.get(), &encoded_output, &encoded_output_len)) {
-    return absl::InvalidArgumentError(
-        "Failed to generate token request encoding");
-  }
-  std::string encoded_output_str(reinterpret_cast<const char*>(encoded_output),
-                                 encoded_output_len);
-  // Free memory.
-  OPENSSL_free(encoded_output);
-  return encoded_output_str;
+  std::string encoded_token_request;
+  ANON_TOKENS_RETURN_IF_ERROR(
+      MarshalAthmTokenRequest(athm_token_request, &encoded_token_request));
+  return encoded_token_request;
 }
 
 absl::StatusOr<AthmTokenRequest> UnmarshalAthmTokenRequest(
     absl::string_view athm_token_request_str) {
   AthmTokenRequest out;
-  out.encoded_request.resize(kAthmEncodedRequestSizeInBytes33);
-  CBS cbs;
-  CBS_init(&cbs,
-           reinterpret_cast<const uint8_t*>(athm_token_request_str.data()),
-           athm_token_request_str.size());
-  if (!CBS_get_u16(&cbs, &out.token_type)) {
-    return absl::InvalidArgumentError("failed to read token type");
-  }
-  if (out.token_type != 0xC07E) {
-    return absl::InvalidArgumentError("unsupported token type");
-  }
-  if (!CBS_get_u8(&cbs, &out.truncated_issuer_key_id)) {
-    return absl::InvalidArgumentError("failed to read truncated_issuer_key_id");
-  }
-  if (!CBS_copy_bytes(&cbs,
-                      reinterpret_cast<uint8_t*>(out.encoded_request.data()),
-                      out.encoded_request.size())) {
-    return absl::InvalidArgumentError(
-        "failed to read athm_token_request.encoded_request");
-  }
-  if (CBS_len(&cbs) != 0) {
-    return absl::InvalidArgumentError("token request had extra bytes");
-  }
+  ANON_TOKENS_RETURN_IF_ERROR(
+      UnmarshalAthmTokenRequest(athm_token_request_str, &out));
   return out;
 }
 

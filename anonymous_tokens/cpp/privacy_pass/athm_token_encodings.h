@@ -21,33 +21,9 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "anonymous_tokens/cpp/privacy_pass/athm_token_encodings_utils.h"
 
 namespace anonymous_tokens {
-
-// The structs and constants are defined using the following specification:
-// https://github.com/cathieyun/draft-athm/blob/main/draft-yun-privacypass-athm.md
-
-constexpr int kAthmEncodedRequestSizeInBytes33 = 33;
-
-constexpr int kAthmTokenSizeInBytes98 = 98;
-
-constexpr int kAthmTokenTypeSizeInBytes2 = 2;
-
-constexpr int kAthmTruncatedIssuerKeyIdSizeInBytes1 = 1;
-
-constexpr int kAthmIssuerKeyIdSizeInBytes32 = 32;
-
-struct AthmTokenRequest {
-  uint16_t token_type{0xC07E}; /* Type ATHM(P-256) */
-  uint8_t truncated_issuer_key_id;
-  std::string encoded_request;
-};
-
-struct AthmToken {
-  uint16_t token_type{0xC07E}; /* Type ATHM(P-256) */
-  std::string issuer_key_id;
-  std::string token;
-};
 
 // This methods takes in a AthmToken structure and encodes it into a string.
 absl::StatusOr<std::string> MarshalAthmToken(const AthmToken& athm_token);
@@ -68,4 +44,4 @@ absl::StatusOr<AthmTokenRequest> UnmarshalAthmTokenRequest(
 
 }  // namespace anonymous_tokens
 
-#endif  // ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_TOKEN_ENCODINGS_H_
+#endif  // ANONYMOUS_TOKENS_CPP_PRIVACY_PASS_ATHM_TOKEN_ENCODINGS_H_
