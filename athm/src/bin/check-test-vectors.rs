@@ -3,7 +3,6 @@ use athm::{
     TokenRequest, TokenResponse,
 };
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 #[derive(Deserialize)]
@@ -64,9 +63,7 @@ fn main() {
                     PublicKeyProof::from_hex(test_vector.output.get("public_key_proof").unwrap())
                         .unwrap();
                 assert!(athm::verify_public_key_proof(&public_key, &public_key_proof, &params));
-                let mut public_key_bytes = vec![];
-                public_key.encode(&mut public_key_bytes);
-                let expected_key_id = hex::encode(Sha256::digest(&public_key_bytes));
+                let expected_key_id = hex::encode(public_key.key_id());
                 let key_id = test_vector.output.get("key_id").unwrap();
                 assert_eq!(key_id, &expected_key_id);
                 println!("{}: OK", procedure);

@@ -110,6 +110,9 @@ pub trait AthmBackend: 'static + Sized {
 
     // ----- Hash functions -----
 
+    /// Computes the SHA-256 hash of `data`.
+    fn sha256(data: &[u8]) -> [u8; 32];
+
     /// Hash to a curve point (P256_XMD:SHA-256_SSWU_RO_).
     fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Point, &'static str>;
 

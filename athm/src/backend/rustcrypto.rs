@@ -29,6 +29,7 @@ use p256::elliptic_curve::{
     Field, FieldBytes, FieldBytesSize, Group, PrimeField,
 };
 use p256::{NistP256, NonZeroScalar};
+use sha2::Digest;
 
 pub use p256::ProjectivePoint as RustCryptoPoint;
 pub use p256::Scalar as RustCryptoScalar;
@@ -76,6 +77,10 @@ impl AthmBackend for RustCryptoBackend {
 
     fn point_is_identity(p: &Self::Point) -> Choice {
         p.is_identity()
+    }
+
+    fn sha256(data: &[u8]) -> [u8; 32] {
+        sha2::Sha256::digest(data).into()
     }
 
     fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Point, &'static str> {
