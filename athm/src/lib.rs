@@ -296,6 +296,23 @@ impl<B: AthmBackend> GenericPublicKey<B> {
         }
         Ok(Self { big_z: big_z.unwrap(), big_c_x: big_c_x.unwrap(), big_c_y: big_c_y.unwrap() })
     }
+
+    /// Computes the key identifier (`key_id`) as the SHA-256 hash of the serialized public key.
+    ///
+    /// Per the ATHM specification (Section 4.3):
+    /// `issuer_key_id = SHA-256(Serialize(verifiedPublicKey))`
+    pub fn key_id_generic(&self) -> [u8; 32] {
+        let mut out = Vec::with_capacity(Self::encoded_size());
+        self.encode_generic(&mut out);
+        B::sha256(&out)
+    }
+}
+
+impl PublicKey {
+    /// Computes the key identifier (`key_id`) as the SHA-256 hash of the serialized public key.
+    pub fn key_id(&self) -> [u8; 32] {
+        self.key_id_generic()
+    }
 }
 
 impl Encodable for PublicKey {
@@ -1284,6 +1301,21 @@ mod tests {
         assert!(!test_point_is_identity(&public_key.big_z));
         assert!(!test_point_is_identity(&public_key.big_c_x));
         assert!(!test_point_is_identity(&public_key.big_c_y));
+    }
+
+    #[test]
+    fn test_public_key_key_id() {
+        let params = gen_test_params();
+        let (_private_key, public_key, _proof) = key_gen(&params);
+
+        let key_id_gen = public_key.key_id_generic();
+        let key_id_default = public_key.key_id();
+        assert_eq!(key_id_gen, key_id_default);
+
+        let mut pk_bytes = Vec::new();
+        public_key.encode(&mut pk_bytes);
+        let expected_key_id = DefaultBackend::sha256(&pk_bytes);
+        assert_eq!(key_id_gen, expected_key_id);
     }
 
     #[test]

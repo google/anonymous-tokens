@@ -1,7 +1,6 @@
 use athm::{Encodable, Params};
 use hex;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 #[derive(Serialize)]
@@ -44,9 +43,7 @@ fn main() {
 
     // Run key_gen.
     let (private_key, public_key, public_key_proof) = athm::key_gen(&params);
-    let mut public_key_bytes = vec![];
-    public_key.encode(&mut public_key_bytes);
-    let key_id = Sha256::digest(&public_key_bytes);
+    let key_id = public_key.key_id();
     test_vectors.push(TestVector {
         procedure: "key_gen",
         args: BTreeMap::new(),

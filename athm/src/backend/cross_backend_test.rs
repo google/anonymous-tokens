@@ -159,6 +159,34 @@ mod cross_backend_tests {
     }
 
     // -----------------------------------------------------------------------
+    // Tests: sha256
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_sha256_parity() {
+        let test_cases: Vec<&[u8]> = vec![
+            b"",
+            b"test",
+            b"hello world",
+            b"a",
+            b"The quick brown fox jumps over the lazy dog",
+            &[0u8; 100],
+            &[0xff; 256],
+        ];
+
+        for input in &test_cases {
+            let rc_hash = RustCryptoBackend::sha256(input);
+            let bssl_hash = BoringSslBackend::sha256(input);
+
+            assert_eq!(
+                rc_hash, bssl_hash,
+                "sha256 mismatch for input={:?}\n  rustcrypto: {:02x?}\n  boringssl:  {:02x?}",
+                input, rc_hash, bssl_hash
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Tests: generator point
     // -----------------------------------------------------------------------
 
@@ -447,6 +475,13 @@ mod cross_backend_tests {
         let client_params = GenericParams::<C>::decode_generic(&params_bytes).unwrap();
         let client_pk = GenericPublicKey::<C>::decode_generic(&pk_bytes).unwrap();
         let client_proof = GenericPublicKeyProof::<C>::decode_generic(&proof_bytes).unwrap();
+
+        // Verify that key_id matches across backends.
+        assert_eq!(
+            pk.key_id_generic(),
+            client_pk.key_id_generic(),
+            "key_id mismatch across backends"
+        );
 
         // Verify that params encode identically on both backends.
         let mut client_params_bytes = Vec::new();

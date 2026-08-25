@@ -927,6 +927,12 @@ impl AthmBackend for BoringSslBackend {
         p.is_identity()
     }
 
+    fn sha256(data: &[u8]) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        hasher.finalize()
+    }
+
     fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<Self::Point, &'static str> {
         hash_to_point(msgs, dsts)
     }
@@ -1081,6 +1087,18 @@ mod tests {
         // Deterministic
         let p2 = hash_to_point(&[b"test"], &[b"DST"]).unwrap();
         assert!(bool::from(p.ct_eq(&p2)));
+    }
+
+    #[test]
+    fn test_sha256() {
+        assert_eq!(
+            BoringSslBackend::sha256(b""),
+            hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        );
+        assert_eq!(
+            BoringSslBackend::sha256(b"hello world"),
+            hex!("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9")
+        );
     }
 
     /// Test hash_to_scalar using VOPRF test vectors from
