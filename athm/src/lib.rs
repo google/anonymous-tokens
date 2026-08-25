@@ -209,7 +209,7 @@ pub struct GenericPrivateKey<B: AthmBackend> {
 pub type PrivateKey = GenericPrivateKey<DefaultBackend>;
 
 impl<B: AthmBackend> GenericPrivateKey<B> {
-    fn encoded_size() -> usize {
+    pub const fn encoded_size() -> usize {
         5 * B::SCALAR_SIZE
     }
 
@@ -273,7 +273,7 @@ pub struct GenericPublicKey<B: AthmBackend> {
 pub type PublicKey = GenericPublicKey<DefaultBackend>;
 
 impl<B: AthmBackend> GenericPublicKey<B> {
-    fn encoded_size() -> usize {
+    pub const fn encoded_size() -> usize {
         3 * B::POINT_SIZE
     }
 
@@ -341,7 +341,7 @@ pub struct GenericPublicKeyProof<B: AthmBackend> {
 pub type PublicKeyProof = GenericPublicKeyProof<DefaultBackend>;
 
 impl<B: AthmBackend> GenericPublicKeyProof<B> {
-    fn encoded_size() -> usize {
+    pub const fn encoded_size() -> usize {
         2 * B::SCALAR_SIZE
     }
 
@@ -390,7 +390,7 @@ pub struct GenericTokenContext<B: AthmBackend> {
 pub type TokenContext = GenericTokenContext<DefaultBackend>;
 
 impl<B: AthmBackend> GenericTokenContext<B> {
-    fn encoded_size() -> usize {
+    pub const fn encoded_size() -> usize {
         2 * B::SCALAR_SIZE
     }
 
@@ -438,7 +438,7 @@ pub struct GenericTokenRequest<B: AthmBackend> {
 pub type TokenRequest = GenericTokenRequest<DefaultBackend>;
 
 impl<B: AthmBackend> GenericTokenRequest<B> {
-    fn encoded_size() -> usize {
+    pub const fn encoded_size() -> usize {
         1 * B::POINT_SIZE
     }
 
@@ -501,7 +501,7 @@ impl<B: AthmBackend> Default for GenericIssuanceProof<B> {
 }
 
 impl<B: AthmBackend> GenericIssuanceProof<B> {
-    fn encoded_size_for_buckets(n_buckets: u8) -> usize {
+    pub fn encoded_size_for_buckets(n_buckets: u8) -> usize {
         3 * B::SCALAR_SIZE + 1 * B::POINT_SIZE + 2 * n_buckets as usize * B::SCALAR_SIZE
     }
 
@@ -597,7 +597,7 @@ impl<B: AthmBackend> Default for GenericTokenResponse<B> {
 }
 
 impl<B: AthmBackend> GenericTokenResponse<B> {
-    fn encoded_size_for_buckets(n_buckets: u8) -> usize {
+    pub fn encoded_size_for_buckets(n_buckets: u8) -> usize {
         1 * B::SCALAR_SIZE
             + 2 * B::POINT_SIZE
             + GenericIssuanceProof::<B>::encoded_size_for_buckets(n_buckets)
@@ -661,7 +661,7 @@ pub struct GenericToken<B: AthmBackend> {
 pub type Token = GenericToken<DefaultBackend>;
 
 impl<B: AthmBackend> GenericToken<B> {
-    fn encoded_size() -> usize {
+    pub const fn encoded_size() -> usize {
         1 * B::SCALAR_SIZE + 2 * B::POINT_SIZE
     }
 
