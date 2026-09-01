@@ -1,4 +1,2 @@
 .DS_Store
 bazel-*
-.orig
-MODULE.bazel.lock

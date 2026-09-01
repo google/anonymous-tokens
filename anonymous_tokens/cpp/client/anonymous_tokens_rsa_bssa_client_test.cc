@@ -342,7 +342,7 @@ TEST_F(AnonymousTokensRsaBssaClientTest, ProcessEmptyResponse) {
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       std::vector<PlaintextMessageWithPublicMetadata> input_messages,
       CreateInput({"message"}));
-  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(AnonymousTokensSignRequest request,
+  ANON_TOKENS_ASSERT_OK_AND_ASSIGN(auto _,
                                    client_->CreateRequest(input_messages));
   AnonymousTokensSignResponse response;
   absl::StatusOr<std::vector<RSABlindSignatureTokenWithInput>>

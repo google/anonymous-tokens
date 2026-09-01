@@ -406,8 +406,8 @@ TEST_F(AnonymousTokensRedemptionClientTest,
        SuccessfulResponseProcessingWithOneToken) {
   // Only one token in request
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
-      auto redemption_request, client_->CreateAnonymousTokensRedemptionRequest(
-                                   {dummy_token_with_input_}));
+      auto _, client_->CreateAnonymousTokensRedemptionRequest(
+                  {dummy_token_with_input_}));
   ANON_TOKENS_ASSERT_OK_AND_ASSIGN(
       auto rsa_blind_sig_redemption_results,
       client_->ProcessAnonymousTokensRedemptionResponse(dummy_response_));
