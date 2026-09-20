@@ -406,21 +406,21 @@ mod cross_backend_tests {
         // Point addition
         assert_eq!(
             rc_point_bytes(&(p_rc + q_rc)),
-            bssl_point_bytes(&(p_bssl + q_bssl)),
+            bssl_point_bytes(&(p_bssl.clone() + q_bssl.clone())),
             "Point addition mismatch"
         );
 
         // Point subtraction
         assert_eq!(
             rc_point_bytes(&(p_rc - q_rc)),
-            bssl_point_bytes(&(p_bssl - q_bssl)),
+            bssl_point_bytes(&(p_bssl.clone() - q_bssl.clone())),
             "Point subtraction mismatch"
         );
 
         // Point negation
         assert_eq!(
             rc_point_bytes(&(-p_rc)),
-            bssl_point_bytes(&(-p_bssl)),
+            bssl_point_bytes(&(-p_bssl.clone())),
             "Point negation mismatch"
         );
 

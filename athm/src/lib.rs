@@ -826,7 +826,7 @@ fn create_public_key_proof_generic<B: AthmBackend>(
     let rho_z = B::random_scalar();
 
     // Compute gamma_z = rho_z * G
-    let gamma_z = params.big_g * rho_z;
+    let gamma_z = params.big_g.clone() * rho_z;
 
     // Build transcript and compute challenge
     let mut transcript = Transcript::new(params.context_string());
@@ -858,7 +858,7 @@ pub fn verify_public_key_proof_generic<B: AthmBackend>(
     params: &GenericParams<B>,
 ) -> bool {
     // Recompute gamma_z = a_z * G + e * Z
-    let gamma_z = params.big_g * proof.a_z + pk.big_z * proof.e;
+    let gamma_z = params.big_g.clone() * proof.a_z + pk.big_z.clone() * proof.e;
 
     // Build transcript and recompute challenge
     let mut transcript = Transcript::new(params.context_string());
@@ -888,9 +888,9 @@ pub fn key_gen_generic<B: AthmBackend>(
     let r_x = B::random_scalar();
     let r_y = B::random_scalar();
 
-    let big_z = params.big_g * z;
-    let big_c_x = (params.big_g * x) + (params.big_h * r_x);
-    let big_c_y = (params.big_g * y) + (params.big_h * r_y);
+    let big_z = params.big_g.clone() * z;
+    let big_c_x = (params.big_g.clone() * x) + (params.big_h.clone() * r_x);
+    let big_c_y = (params.big_g.clone() * y) + (params.big_h.clone() * r_y);
 
     let pi = create_public_key_proof_generic::<B>(&z, &big_z, params);
 
@@ -920,7 +920,7 @@ pub fn token_request_generic<B: AthmBackend>(
     }
     let r = B::random_scalar();
     let tc = B::random_scalar();
-    let big_t = params.big_g * r + public_key.big_z * tc;
+    let big_t = params.big_g.clone() * r + public_key.big_z.clone() * tc;
     Ok((GenericTokenContext { r, tc }, GenericTokenRequest { big_t }))
 }
 
@@ -946,38 +946,33 @@ fn create_issuance_proof_generic<B: AthmBackend>(
             )
         })
         .collect();
+
+    let r_mu = B::random_scalar();
     let mut a_vec: Vec<B::Scalar> = (0..params.n_buckets)
         .map(|i| {
-            B::Scalar::conditional_select(
-                &B::random_scalar(),
-                &B::scalar_zero(),
-                i.ct_eq(&hidden_metadata),
-            )
+            B::Scalar::conditional_select(&B::random_scalar(), &r_mu, i.ct_eq(&hidden_metadata))
         })
         .collect();
 
-    let r_mu = B::random_scalar();
     let r_d = B::random_scalar();
     let r_rho = B::random_scalar();
     let r_w = B::random_scalar();
     let mu = B::random_scalar();
 
-    let big_c = public_key.big_c_y * B::Scalar::from(hidden_metadata as u64) + params.big_h * mu;
+    let big_c = public_key.big_c_y.clone() * B::Scalar::from(hidden_metadata as u64)
+        + params.big_h.clone() * mu;
 
     let c_vec: Vec<B::Point> = (0..params.n_buckets)
         .map(|i| {
-            B::Point::conditional_select(
-                &(params.big_h * a_vec[i as usize]
-                    - (big_c - public_key.big_c_y * B::Scalar::from(i as u64)) * e_vec[i as usize]),
-                &(params.big_h * r_mu),
-                i.ct_eq(&hidden_metadata),
-            )
+            params.big_h.clone() * a_vec[i as usize]
+                - (big_c.clone() - public_key.big_c_y.clone() * B::Scalar::from(i as u64))
+                    * e_vec[i as usize]
         })
         .collect();
 
-    let c_d = *big_u * r_d;
-    let c_rho = *big_v * r_d + params.big_h * r_rho;
-    let c_w = *big_v * r_d + params.big_g * r_w;
+    let c_d = big_u.clone() * r_d;
+    let c_rho = big_v.clone() * r_d + params.big_h.clone() * r_rho;
+    let c_w = big_v.clone() * r_d + params.big_g.clone() * r_w;
 
     let mut transcript = Transcript::new(params.context_string());
     transcript.append_point::<B>(&params.big_g);
@@ -1057,12 +1052,14 @@ pub fn token_response_generic<B: AthmBackend>(
     let big_t = &token_request.big_t;
     let ts = B::random_scalar();
     let d = B::random_non_zero_scalar();
-    let big_u = params.big_g * d;
-    let big_x = params.big_g * private_key.x;
-    let big_y = params.big_g * private_key.y;
-    let big_v =
-        (big_x + big_y * B::Scalar::from(hidden_metadata as u64) + public_key.big_z * ts + *big_t)
-            * d;
+    let big_u = params.big_g.clone() * d;
+    let big_x = params.big_g.clone() * private_key.x;
+    let big_y = params.big_g.clone() * private_key.y;
+    let big_v = (big_x
+        + big_y * B::Scalar::from(hidden_metadata as u64)
+        + public_key.big_z.clone() * ts
+        + big_t.clone())
+        * d;
     let issuance_proof = create_issuance_proof_generic::<B>(
         private_key,
         public_key,
@@ -1101,18 +1098,19 @@ pub fn verify_issuance_proof_generic<B: AthmBackend>(
 
     let c_vec: Vec<B::Point> = (0..params.n_buckets)
         .map(|i| {
-            params.big_h * proof.a_vec[i as usize]
-                - (proof.big_c - pk.big_c_y * B::Scalar::from(i as u64)) * proof.e_vec[i as usize]
+            params.big_h.clone() * proof.a_vec[i as usize]
+                - (proof.big_c.clone() - pk.big_c_y.clone() * B::Scalar::from(i as u64))
+                    * proof.e_vec[i as usize]
         })
         .collect();
 
     let e: B::Scalar = proof.e_vec.iter().copied().fold(B::scalar_zero(), |acc, x| acc + x);
 
-    let c_d = *big_u * proof.a_d + params.big_g * e;
-    let c_rho = *big_v * proof.a_d
-        + params.big_h * proof.a_rho
-        + (pk.big_c_x + proof.big_c + pk.big_z * *ts + *big_t) * e;
-    let c_w = *big_v * proof.a_d + params.big_g * proof.a_w + *big_t * e;
+    let c_d = big_u.clone() * proof.a_d + params.big_g.clone() * e;
+    let c_rho = big_v.clone() * proof.a_d
+        + params.big_h.clone() * proof.a_rho
+        + (pk.big_c_x.clone() + proof.big_c.clone() + pk.big_z.clone() * *ts + big_t.clone()) * e;
+    let c_w = big_v.clone() * proof.a_d + params.big_g.clone() * proof.a_w + big_t.clone() * e;
 
     let mut transcript = Transcript::new(params.context_string());
     transcript.append_point::<B>(&params.big_g);
@@ -1159,8 +1157,8 @@ pub fn finalize_token_generic<B: AthmBackend>(
         return Err("Invalid issuance proof");
     }
     let c = B::random_non_zero_scalar();
-    let big_p = response.big_u * c;
-    let big_q = (response.big_v - response.big_u * context.r) * c;
+    let big_p = response.big_u.clone() * c;
+    let big_q = (response.big_v.clone() - response.big_u.clone() * context.r) * c;
     let t = context.tc + response.ts;
     Ok(GenericToken { t, big_p, big_q })
 }
@@ -1179,7 +1177,7 @@ pub fn verify_token_generic<B: AthmBackend>(
     let check = B::point_is_identity(&token.big_p) | B::point_is_identity(&token.big_q);
 
     let i_match = (0..params.n_buckets).fold(CtOption::new(0u8, Choice::from(0u8)), |acc, i| {
-        let q_i = token.big_p
+        let q_i = token.big_p.clone()
             * (private_key.x + token.t * private_key.z + B::Scalar::from(i as u64) * private_key.y);
         CtOption::<u8>::conditional_select(
             &acc,
@@ -1459,7 +1457,7 @@ mod tests {
 
         // Test with tampered U
         let mut tampered_response2 = response.clone();
-        tampered_response2.big_u = tampered_response2.big_u + params.big_g;
+        tampered_response2.big_u = tampered_response2.big_u + params.big_g.clone();
         assert!(!verify_issuance_proof(
             &server_public_key,
             &token_req.big_t,
@@ -1546,7 +1544,8 @@ mod tests {
 
         // Exercise token malleability: multiply big_p and big_q by the same scalar k.
         let k = test_random_scalar();
-        let malleated_token = Token { t: token.t, big_p: token.big_p * k, big_q: token.big_q * k };
+        let malleated_token =
+            Token { t: token.t, big_p: token.big_p.clone() * k, big_q: token.big_q.clone() * k };
 
         // 1. They still validate and recover the same metadata.
         let malleated_metadata =
@@ -1714,21 +1713,21 @@ mod tests {
         assert!(bool::from(verify_token(&server_private_key, &mixed, &params).is_none()));
 
         let mut mixed = token1.clone();
-        mixed.big_p = token2.big_p;
+        mixed.big_p = token2.big_p.clone();
         assert!(bool::from(verify_token(&server_private_key, &mixed, &params).is_none()));
 
         let mut mixed = token1.clone();
-        mixed.big_q = token2.big_q;
+        mixed.big_q = token2.big_q.clone();
         assert!(bool::from(verify_token(&server_private_key, &mixed, &params).is_none()));
 
         // Try partial component mixing
-        let mixed = Token { t: token1.t, big_p: token1.big_p, big_q: token2.big_q };
+        let mixed = Token { t: token1.t, big_p: token1.big_p.clone(), big_q: token2.big_q.clone() };
         assert!(bool::from(verify_token(&server_private_key, &mixed, &params).is_none()));
 
-        let mixed = Token { t: token1.t, big_p: token2.big_p, big_q: token1.big_q };
+        let mixed = Token { t: token1.t, big_p: token2.big_p.clone(), big_q: token1.big_q.clone() };
         assert!(bool::from(verify_token(&server_private_key, &mixed, &params).is_none()));
 
-        let mixed = Token { t: token2.t, big_p: token1.big_p, big_q: token1.big_q };
+        let mixed = Token { t: token2.t, big_p: token1.big_p.clone(), big_q: token1.big_q.clone() };
         assert!(bool::from(verify_token(&server_private_key, &mixed, &params).is_none()));
     }
 
@@ -1757,8 +1756,8 @@ mod tests {
         // Attempt 3: Try to use server's public key components
         let forged = Token {
             t: Scalar::from(5u64),
-            big_p: server_public_key.big_z,
-            big_q: server_public_key.big_c_x,
+            big_p: server_public_key.big_z.clone(),
+            big_q: server_public_key.big_c_x.clone(),
         };
         assert!(bool::from(verify_token(&server_private_key, &forged, &params).is_none()));
 
@@ -1767,7 +1766,7 @@ mod tests {
         let fake_c = test_random_scalar();
         let fake_p = test_generator_g() * fake_c;
         let fake_t = test_random_scalar();
-        let fake_q = fake_p * server_private_key.x; // This won't work without proper protocol
+        let fake_q = fake_p.clone() * server_private_key.x; // This won't work without proper protocol
         let forged = Token { t: fake_t, big_p: fake_p, big_q: fake_q };
         assert!(bool::from(verify_token(&server_private_key, &forged, &params).is_none()));
     }
