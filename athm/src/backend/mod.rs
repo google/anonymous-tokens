@@ -62,8 +62,7 @@ pub trait AthmBackend: 'static + Sized {
         + ConditionallySelectable;
 
     /// Point type (element of the P-256 curve group).
-    type Point: Copy
-        + Clone
+    type Point: Clone
         + fmt::Debug
         + Default
         + PartialEq
@@ -73,8 +72,7 @@ pub trait AthmBackend: 'static + Sized {
         + Sub<Output = Self::Point>
         + Neg<Output = Self::Point>
         + Mul<Self::Scalar, Output = Self::Point>
-        + ConstantTimeEq
-        + ConditionallySelectable;
+        + ConstantTimeEq;
 
     /// Size of a serialized scalar in bytes.
     const SCALAR_SIZE: usize;
