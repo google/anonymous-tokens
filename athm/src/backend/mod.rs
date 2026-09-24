@@ -36,6 +36,12 @@ pub mod boringssl;
 #[cfg(all(test, feature = "rustcrypto", feature = "boringssl"))]
 mod cross_backend_test;
 
+// Timing tests are slow and sensitive to machine load, so they are gated behind
+// their own feature and built as separate targets rather than running as part
+// of the ordinary suite.
+#[cfg(all(test, feature = "timing-tests"))]
+mod timing_test;
+
 /// Trait abstracting the elliptic curve backend for the ATHM protocol.
 ///
 /// Implementors provide P-256 scalar and point types along with all

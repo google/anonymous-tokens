@@ -19,8 +19,8 @@
 //! # Overview
 //!
 //! ATHM allows servers to embed categorical metadata (like risk scores or user tiers)
-//! in tokens without clients knowing which metadata values. This enables privacy-preserving authentication
-//! with hidden authorization levels.
+//! in tokens without clients knowing which metadata values. This enables privacy-preserving
+//! authentication with hidden authorization levels.
 //!
 //! # Example
 //!
@@ -68,7 +68,6 @@ use zeroize::Zeroize;
 ///
 /// This struct provides a clean abstraction for building transcripts
 /// and generating challenges in non-interactive zero-knowledge proofs.
-///
 //
 #[derive(Clone)]
 struct Transcript {
@@ -137,8 +136,8 @@ pub trait Decodable {
         Self: Sized;
 }
 
-// Helper to decode a Scalar from a byte slice. Returns a CtOption of the resulting scalar if successful, and a new slice of the remaining input.
-// Panics if the input is too small.
+// Helper to decode a Scalar from a byte slice. Returns a CtOption of the resulting scalar if
+// successful, and a new slice of the remaining input. Panics if the input is too small.
 fn decode_scalar<'a>(input: &'a [u8]) -> (CtOption<Scalar>, &'a [u8]) {
     DefaultBackend::decode_scalar(input)
 }
@@ -167,8 +166,8 @@ fn encode_point(point: &ProjectivePoint, out: &mut Vec<u8>) {
     DefaultBackend::encode_point(point, out);
 }
 
-// Helper to decode a ProjectivePoint from a byte slice. Returns a CtOption of the resulting point if successful, and a new slice of the remaining input.
-// Panics if the input is too small.
+// Helper to decode a ProjectivePoint from a byte slice. Returns a CtOption of the resulting point
+// if successful, and a new slice of the remaining input. Panics if the input is too small.
 fn decode_point<'a>(input: &'a [u8]) -> (CtOption<ProjectivePoint>, &'a [u8]) {
     DefaultBackend::decode_point(input)
 }

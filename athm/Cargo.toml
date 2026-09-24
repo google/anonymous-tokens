@@ -8,6 +8,9 @@ default = ["rustcrypto"]
 rustcrypto = ["p256", "elliptic-curve", "sha2", "group", "ff", "sec1", "rand", "hash2curve"]
 boringssl = ["bssl-sys"]
 test-vectors = ["hex", "serde", "serde_json"]
+# Enables the statistical constant-time tests in src/backend/timing_test.rs.
+# Off by default: they measure wall-clock time and are sensitive to machine load.
+timing-tests = []
 
 [dependencies]
 p256 = { version = "0.14", features = ["arithmetic", "group-digest", "ecdsa"], optional = true }
