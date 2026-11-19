@@ -406,21 +406,21 @@ mod cross_backend_tests {
         // Point addition
         assert_eq!(
             rc_point_bytes(&(p_rc + q_rc)),
-            bssl_point_bytes(&(p_bssl + q_bssl)),
+            bssl_point_bytes(&(&p_bssl + &q_bssl)),
             "Point addition mismatch"
         );
 
         // Point subtraction
         assert_eq!(
             rc_point_bytes(&(p_rc - q_rc)),
-            bssl_point_bytes(&(p_bssl - q_bssl)),
+            bssl_point_bytes(&(&p_bssl - &q_bssl)),
             "Point subtraction mismatch"
         );
 
         // Point negation
         assert_eq!(
             rc_point_bytes(&(-p_rc)),
-            bssl_point_bytes(&(-p_bssl)),
+            bssl_point_bytes(&(-&p_bssl)),
             "Point negation mismatch"
         );
 
@@ -430,7 +430,7 @@ mod cross_backend_tests {
 
         assert_eq!(
             rc_point_bytes(&(p_rc * s_rc)),
-            bssl_point_bytes(&(p_bssl * s_bssl)),
+            bssl_point_bytes(&(&p_bssl * s_bssl)),
             "Point scalar multiplication mismatch"
         );
     }
