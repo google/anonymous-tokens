@@ -14,8 +14,14 @@
 
 //! BoringSSL backend for ATHM using `bssl_sys` FFI bindings.
 //!
-//! Scalar arithmetic (add, sub, mul, neg, invert) is constant-time. Point operations are
-//! constant-time as long as neither input nor output is the point at infinity.
+//! # Constant-time properties
+//!
+//! - **Scalar arithmetic** is constant-time (relies on fixed 4-word `BIGNUM` widths).
+//! - **Point arithmetic** on the owned `EC_POINT`s is constant-time, except that `EC_POINT_add`
+//!   (and so `Sub`) branches when `P == ±Q` (`P + (-P)` short-circuits and is ~1.7x faster on
+//!   x86-64). Don't add secret points that may be equal or inverse.
+//! - **Encoding, decoding and `hash_to_scalar`** are not constant-time; use them only on public
+//!   data.
 
 use super::AthmBackend;
 use core::ptr::{null, null_mut, NonNull};
@@ -41,12 +47,14 @@ impl BnWrapper {
     }
 
     /// Create a BIGNUM from big-endian bytes.
+    ///
+    /// Constant-time in `bytes` for a fixed `bytes.len()`: `BN_bin2bn` preserves leading zeros,
+    /// so `SCALAR_SIZE` (32) bytes always yield a 4-word BIGNUM on 64-bit platforms (required by
+    /// `bn_mod_mul_mont` and `raw_to_bytes32`).
     fn from_bytes(bytes: &[u8]) -> Self {
         let bn = Self::new();
         // SAFETY: bn is a valid BIGNUM pointer. bytes.as_ptr() and bytes.len()
         // are valid parameters for the input buffer.
-        //
-        // Constant-time assuming bytes.len() is constant.
         let r = unsafe { bssl_sys::BN_bin2bn(bytes.as_ptr(), bytes.len(), bn.as_mut_ptr()) };
         assert!(!r.is_null());
         bn
@@ -58,10 +66,9 @@ impl BnWrapper {
     }
 
     /// Serialize a BIGNUM pointer to a 32-byte big-endian array.
-    /// This is useful for borrowed pointers (e.g. from EC_GROUP_get0_order)
-    /// that are not owned by a BnWrapper.
     ///
-    /// Constant-time assuming `bn` is valid and of length less than or equal to SCALAR_SIZE.
+    /// Constant-time when `bn` has a fixed allocated width (4 words for scalars from
+    /// `from_bytes`; `BN_bn2bin_padded` loops over `min(SCALAR_SIZE, width * 8)` bytes).
     fn raw_to_bytes32(bn: *const bssl_sys::BIGNUM) -> [u8; SCALAR_SIZE] {
         let mut out = [0u8; SCALAR_SIZE];
         // SAFETY: out.as_mut_ptr() points to a valid buffer of SCALAR_SIZE bytes.
@@ -84,98 +91,6 @@ impl Drop for BnWrapper {
     fn drop(&mut self) {
         // SAFETY: self.0 was allocated by BN_new/BN_bin2bn and is a valid non-null pointer.
         unsafe { bssl_sys::BN_free(self.0.as_ptr()) };
-    }
-}
-
-/// Owns an `EC_POINT` through `NonNull` and frees it on drop via `EC_POINT_free`.
-struct EcPointWrapper(NonNull<bssl_sys::EC_POINT>);
-
-impl EcPointWrapper {
-    /// Allocate a new EC_POINT on the given group. Panics if allocation fails.
-    fn new(group: *const bssl_sys::EC_GROUP) -> Self {
-        // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
-        let ptr = unsafe { bssl_sys::EC_POINT_new(group) };
-        Self(NonNull::new(ptr).expect("EC_POINT_new returned null"))
-    }
-
-    /// Deserialize compressed bytes into an EC_POINT wrapper.
-    /// All-zeros input is treated as the point at infinity (identity).
-    ///
-    /// This function is constant-time as long as the input is not the point at infinity.
-    fn from_bytes(bytes: &[u8; 33]) -> Self {
-        let group = p256_group();
-        let pt = Self::new(group);
-        // All-zeros represents identity (point at infinity)
-        if bytes == &[0u8; 33] {
-            // SAFETY: group and pt are valid pointers.
-            let r = unsafe { bssl_sys::EC_POINT_set_to_infinity(group, pt.as_mut_ptr()) };
-            assert_eq!(r, 1);
-            return pt;
-        }
-        // SAFETY: group and pt are valid pointers, bytes points to a 33-byte buffer.
-        let r = unsafe {
-            bssl_sys::EC_POINT_oct2point(
-                group,
-                pt.as_mut_ptr(),
-                bytes.as_ptr(),
-                33,
-                /*ctx=*/ null_mut(),
-            )
-        };
-        assert_eq!(r, 1, "EC_POINT_oct2point failed");
-        pt
-    }
-
-    /// Serialize this EC_POINT to 33-byte compressed form.
-    /// Returns all-zeros for the point at infinity (identity).
-    ///
-    /// This function is constant-time as long as the input is not the point at infinity.
-    fn to_bytes33(&self) -> [u8; 33] {
-        Self::raw_to_bytes33(self.as_ptr())
-    }
-
-    /// Serialize an EC_POINT pointer to 33-byte compressed form.
-    /// This is useful for borrowed pointers (e.g. from EC_GROUP_get0_generator)
-    /// that are not owned by an EcPointWrapper.
-    ///
-    /// This function is constant-time as long as the input is not the point at infinity.
-    fn raw_to_bytes33(pt: *const bssl_sys::EC_POINT) -> [u8; 33] {
-        let group = p256_group();
-        // Check if point is at infinity
-        // SAFETY: group and pt are valid pointers.
-        if unsafe { bssl_sys::EC_POINT_is_at_infinity(group, pt) } == 1 {
-            return [0u8; 33];
-        }
-        let mut buf = [0u8; 33];
-        // SAFETY: group and pt are valid, buf points to a 33-byte buffer.
-        let len = unsafe {
-            bssl_sys::EC_POINT_point2oct(
-                group,
-                pt,
-                bssl_sys::point_conversion_form_t::POINT_CONVERSION_COMPRESSED,
-                buf.as_mut_ptr(),
-                33,
-                /*ctx=*/ null_mut(),
-            )
-        };
-        assert_eq!(len, 33);
-        buf
-    }
-
-    fn as_ptr(&self) -> *const bssl_sys::EC_POINT {
-        self.0.as_ptr()
-    }
-
-    fn as_mut_ptr(&self) -> *mut bssl_sys::EC_POINT {
-        self.0.as_ptr()
-    }
-}
-
-impl Drop for EcPointWrapper {
-    fn drop(&mut self) {
-        // SAFETY: self.0 was allocated by EC_POINT_new and is a valid non-null
-        // pointer.
-        unsafe { bssl_sys::EC_POINT_free(self.0.as_ptr()) };
     }
 }
 
@@ -310,11 +225,10 @@ unsafe fn bn_mod_op_quick(
     // bn_a, bn_b, bn_r freed automatically on drop.
 }
 
-/// Constant-time multiplication of two scalars mod the P-256 order, using Montgomery
-/// multiplication.
+/// Constant-time scalar multiplication mod the P-256 order via Montgomery multiplication.
 ///
-/// The operands are converted to Montgomery form, multiplied, and the result is converted back.
-/// All operations are constant-time for secret scalar values.
+/// Requires both operands to have the same allocated width as the modulus (4 words, guaranteed
+/// by `BnWrapper::from_bytes`) so `BN_mod_mul_montgomery` takes its fixed-width fast path.
 fn bn_mod_mul_mont(a: &[u8; SCALAR_SIZE], b: &[u8; SCALAR_SIZE]) -> [u8; SCALAR_SIZE] {
     let bn_a = BnWrapper::from_bytes(a);
     let bn_b = BnWrapper::from_bytes(b);
@@ -323,8 +237,8 @@ fn bn_mod_mul_mont(a: &[u8; SCALAR_SIZE], b: &[u8; SCALAR_SIZE]) -> [u8; SCALAR_
     let ctx = BnCtxWrapper::new();
     let mont = p256_order_mont_ctx();
 
-    // Compute a * b = MulMont(ToMont(a), b). This saves two montgomery reductions compared to computing
-    // FromMont(MulMont(ToMont(a), ToMont(b))).
+    // Compute a * b = MulMont(ToMont(a), b). This saves two montgomery reductions compared to
+    // computing FromMont(MulMont(ToMont(a), ToMont(b))).
 
     // Convert a to Montgomery form.
     // SAFETY: All BIGNUM and MONT_CTX pointers are valid.
@@ -378,11 +292,10 @@ impl BsslScalar {
         self.ct_eq(&Self::ZERO)
     }
 
-    /// Constant-time modular inversion using Fermat's little theorem:
-    /// a^{-1} = a^{order-2} (mod order) for prime order.
+    /// Constant-time modular inversion (`a^{order-2} mod order`). Returns `None` if `self` is zero.
     ///
-    /// Uses `BN_mod_exp_mont`, which treats the base as secret.
-    /// Returns `None` (as a `CtOption`) if `self` is zero.
+    /// `BN_mod_exp_mont` treats the base as secret and the exponent as public (safe here since
+    /// `order - 2` is constant).
     pub fn invert(&self) -> CtOption<BsslScalar> {
         // Always perform the inversion to avoid leaking whether self is zero.
         let is_nonzero = !self.is_zero();
@@ -496,23 +409,117 @@ impl ConstantTimeEq for BsslScalar {
 }
 
 // ---------------------------------------------------------------------------
-// BsslPoint – a 33-byte compressed P-256 point
+// BsslPoint – an owned BoringSSL EC_POINT on P-256
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Zeroize, PartialEq, Eq)]
-pub struct BsslPoint(pub [u8; 33]);
+/// Owns an `EC_POINT` on P-256 through `NonNull` and frees it on drop via `EC_POINT_free`.
+pub struct BsslPoint(NonNull<bssl_sys::EC_POINT>);
+
+// SAFETY: BsslPoint exclusively owns its heap-allocated EC_POINT, and the underlying
+// P-256 EC_GROUP is a process-static immutable structure (EC_GROUP_dup/EC_GROUP_free
+// are no-ops on built-in static groups). There is no thread-local or shared mutable state.
+unsafe impl Send for BsslPoint {}
+
+impl Drop for BsslPoint {
+    fn drop(&mut self) {
+        // SAFETY: self.0 was allocated by EC_POINT_new and is a valid non-null pointer.
+        unsafe { bssl_sys::EC_POINT_free(self.0.as_ptr()) };
+    }
+}
+
+impl Clone for BsslPoint {
+    fn clone(&self) -> Self {
+        let dst = Self::new(p256_group());
+        // SAFETY: dst and self are valid EC_POINT pointers on the same group.
+        let rc = unsafe { bssl_sys::EC_POINT_copy(dst.as_mut_ptr(), self.as_ptr()) };
+        assert_eq!(rc, 1, "EC_POINT_copy failed");
+        dst
+    }
+}
 
 impl Default for BsslPoint {
     fn default() -> Self {
-        BsslPoint([0u8; 33])
+        Self::identity()
+    }
+}
+
+impl core::fmt::Debug for BsslPoint {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("BsslPoint").field(&self.to_bytes33()).finish()
+    }
+}
+
+impl Zeroize for BsslPoint {
+    fn zeroize(&mut self) {
+        let group = p256_group();
+        // SAFETY: group and self are valid pointers. EC_POINT_set_to_infinity
+        // calls ec_GFp_simple_point_init, which zeroes X, Y, and Z via OPENSSL_memset.
+        let rc = unsafe { bssl_sys::EC_POINT_set_to_infinity(group, self.as_mut_ptr()) };
+        assert_eq!(rc, 1);
     }
 }
 
 impl BsslPoint {
-    pub const IDENTITY: BsslPoint = BsslPoint([0u8; 33]);
+    /// Allocate a new EC_POINT on the given group. Panics if allocation fails.
+    fn new(group: *const bssl_sys::EC_GROUP) -> Self {
+        // SAFETY: EC_POINT_new is safe to call with a valid group pointer.
+        let ptr = unsafe { bssl_sys::EC_POINT_new(group) };
+        Self(NonNull::new(ptr).expect("EC_POINT_new returned null"))
+    }
+
+    fn as_ptr(&self) -> *const bssl_sys::EC_POINT {
+        self.0.as_ptr()
+    }
+
+    fn as_mut_ptr(&self) -> *mut bssl_sys::EC_POINT {
+        self.0.as_ptr()
+    }
+
+    /// Return the identity element (point at infinity).
+    pub fn identity() -> BsslPoint {
+        let group = p256_group();
+        let pt = Self::new(group);
+        // Note: EC_POINT_new already zeroes X, Y, and Z via ec_GFp_simple_point_init,
+        // but we call EC_POINT_set_to_infinity explicitly as defense-in-depth against
+        // future BoringSSL changes.
+        // SAFETY: group and pt are valid pointers.
+        let rc = unsafe { bssl_sys::EC_POINT_set_to_infinity(group, pt.as_mut_ptr()) };
+        assert_eq!(rc, 1);
+        pt
+    }
 
     pub fn is_identity(&self) -> Choice {
-        self.ct_eq(&Self::IDENTITY)
+        let group = p256_group();
+        // SAFETY: group and self are valid pointers. EC_POINT_is_at_infinity
+        // checks Z == 0 using constant-time word masks (ec_felem_non_zero_mask).
+        let rc = unsafe { bssl_sys::EC_POINT_is_at_infinity(group, self.as_ptr()) };
+        Choice::from((rc == 1) as u8)
+    }
+
+    /// Serialize this EC_POINT to 33-byte compressed form.
+    /// Returns all-zeros for the point at infinity (identity).
+    ///
+    /// This function is only called at serialization boundaries.
+    fn to_bytes33(&self) -> [u8; POINT_SIZE] {
+        let group = p256_group();
+        // SAFETY: group and self are valid pointers.
+        if unsafe { bssl_sys::EC_POINT_is_at_infinity(group, self.as_ptr()) } == 1 {
+            return [0u8; POINT_SIZE];
+        }
+        let mut buf = [0u8; POINT_SIZE];
+        // SAFETY: group and self are valid, buf points to a 33-byte buffer.
+        let len = unsafe {
+            bssl_sys::EC_POINT_point2oct(
+                group,
+                self.as_ptr(),
+                bssl_sys::point_conversion_form_t::POINT_CONVERSION_COMPRESSED,
+                buf.as_mut_ptr(),
+                POINT_SIZE,
+                /* ctx= */ null_mut(),
+            )
+        };
+        assert_eq!(len, POINT_SIZE);
+        buf
     }
 
     /// Return the standard P-256 generator.
@@ -534,131 +541,173 @@ impl core::ops::Neg for BsslPoint {
     type Output = BsslPoint;
     fn neg(self) -> BsslPoint {
         let group = p256_group();
-        let pt = EcPointWrapper::from_bytes(&self.0);
-        // SAFETY: group and pt are valid pointers.
+        // SAFETY: group and self are valid pointers.
         let rc = unsafe {
-            bssl_sys::EC_POINT_invert(group, pt.as_mut_ptr(), /*ctx=*/ null_mut())
+            bssl_sys::EC_POINT_invert(group, self.as_mut_ptr(), /* ctx= */ null_mut())
         };
         assert_eq!(rc, 1);
-        BsslPoint(pt.to_bytes33())
-        // pt freed automatically on drop.
+        self
+    }
+}
+
+impl core::ops::Neg for &BsslPoint {
+    type Output = BsslPoint;
+    fn neg(self) -> BsslPoint {
+        -self.clone()
     }
 }
 
 impl core::ops::Add<BsslPoint> for BsslPoint {
     type Output = BsslPoint;
 
-    /// Constant-time assuming neither inputs nor output are the point at infinity.
     fn add(self, rhs: BsslPoint) -> BsslPoint {
-        let group = p256_group();
-        let a = EcPointWrapper::from_bytes(&self.0);
-        let b = EcPointWrapper::from_bytes(&rhs.0);
-        let r = EcPointWrapper::new(group);
-        // SAFETY: group, r, a, and b are all valid pointers.
-        let rc = unsafe {
-            bssl_sys::EC_POINT_add(group, r.as_mut_ptr(), a.as_ptr(), b.as_ptr(), null_mut())
-        };
-        assert_eq!(rc, 1);
-        BsslPoint(r.to_bytes33())
-        // r, a, b freed automatically on drop.
+        &self + &rhs
     }
 }
 
 impl core::ops::Add<&BsslPoint> for BsslPoint {
     type Output = BsslPoint;
     fn add(self, rhs: &BsslPoint) -> BsslPoint {
-        self + *rhs
+        &self + rhs
+    }
+}
+
+impl core::ops::Add<BsslPoint> for &BsslPoint {
+    type Output = BsslPoint;
+    fn add(self, rhs: BsslPoint) -> BsslPoint {
+        self + &rhs
+    }
+}
+
+impl core::ops::Add<&BsslPoint> for &BsslPoint {
+    type Output = BsslPoint;
+    fn add(self, rhs: &BsslPoint) -> BsslPoint {
+        let group = p256_group();
+        let r = BsslPoint::new(group);
+        // SAFETY: group, r, self, and rhs are all valid pointers.
+        let rc = unsafe {
+            bssl_sys::EC_POINT_add(
+                group,
+                r.as_mut_ptr(),
+                self.as_ptr(),
+                rhs.as_ptr(),
+                /* ctx= */ null_mut(),
+            )
+        };
+        assert_eq!(rc, 1);
+        r
     }
 }
 
 impl core::ops::Sub<BsslPoint> for BsslPoint {
     type Output = BsslPoint;
 
-    /// Constant-time assuming neither inputs nor output are the point at infinity.
     fn sub(self, rhs: BsslPoint) -> BsslPoint {
         let group = p256_group();
-        let a = EcPointWrapper::from_bytes(&self.0);
-        let b = EcPointWrapper::from_bytes(&rhs.0);
-        // Negate b in place
-        // SAFETY: group and b are valid pointers.
+        // Negate rhs in place since we own it.
+        // SAFETY: group and rhs are valid pointers.
         let rc = unsafe {
-            bssl_sys::EC_POINT_invert(group, b.as_mut_ptr(), /*ctx=*/ null_mut())
+            bssl_sys::EC_POINT_invert(group, rhs.as_mut_ptr(), /* ctx= */ null_mut())
         };
         assert_eq!(rc, 1);
-        let r = EcPointWrapper::new(group);
-        // SAFETY: group, r, a, and b are all valid pointers.
+        &self + &rhs
+    }
+}
+
+impl core::ops::Sub<&BsslPoint> for BsslPoint {
+    type Output = BsslPoint;
+    fn sub(self, rhs: &BsslPoint) -> BsslPoint {
+        self - rhs.clone()
+    }
+}
+
+impl core::ops::Sub<BsslPoint> for &BsslPoint {
+    type Output = BsslPoint;
+    fn sub(self, rhs: BsslPoint) -> BsslPoint {
+        let group = p256_group();
+        // SAFETY: group and rhs are valid pointers.
         let rc = unsafe {
-            bssl_sys::EC_POINT_add(
-                group,
-                r.as_mut_ptr(),
-                a.as_ptr(),
-                b.as_ptr(),
-                /*ctx=*/ null_mut(),
-            )
+            bssl_sys::EC_POINT_invert(group, rhs.as_mut_ptr(), /* ctx= */ null_mut())
         };
         assert_eq!(rc, 1);
-        BsslPoint(r.to_bytes33())
-        // r, a, b freed automatically on drop.
+        self + &rhs
+    }
+}
+
+impl core::ops::Sub<&BsslPoint> for &BsslPoint {
+    type Output = BsslPoint;
+    fn sub(self, rhs: &BsslPoint) -> BsslPoint {
+        self - rhs.clone()
     }
 }
 
 impl core::ops::Mul<BsslScalar> for BsslPoint {
     type Output = BsslPoint;
 
-    /// Constant-time in both the scalar and the point, assuming neither `self` nor the output
-    /// are the point at infinity.
     fn mul(self, rhs: BsslScalar) -> BsslPoint {
-        let group = p256_group();
-        let pt = EcPointWrapper::from_bytes(&self.0);
-        let bn_s = BnWrapper::from_bytes(&rhs.0);
-        let r = EcPointWrapper::new(group);
-        // r = NULL*gen + pt*bn_s  (i.e. pt * scalar)
-        // SAFETY: group, r, pt, and bn_s are all valid pointers.
-        let rc = unsafe {
-            bssl_sys::EC_POINT_mul(
-                group,
-                r.as_mut_ptr(),
-                null(),
-                pt.as_ptr(),
-                bn_s.as_ptr(),
-                /*ctx=*/ null_mut(),
-            )
-        };
-        assert_eq!(rc, 1);
-        BsslPoint(r.to_bytes33())
-        // r, pt, bn_s freed automatically on drop.
+        &self * &rhs
     }
 }
 
 impl core::ops::Mul<&BsslScalar> for BsslPoint {
     type Output = BsslPoint;
     fn mul(self, rhs: &BsslScalar) -> BsslPoint {
-        self * *rhs
+        &self * rhs
+    }
+}
+
+impl core::ops::Mul<BsslScalar> for &BsslPoint {
+    type Output = BsslPoint;
+    fn mul(self, rhs: BsslScalar) -> BsslPoint {
+        self * &rhs
     }
 }
 
 impl core::ops::Mul<&BsslScalar> for &BsslPoint {
     type Output = BsslPoint;
     fn mul(self, rhs: &BsslScalar) -> BsslPoint {
-        *self * *rhs
-    }
-}
-
-impl ConditionallySelectable for BsslPoint {
-    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        let mut res = [0u8; 33];
-        for i in 0..33 {
-            res[i] = u8::conditional_select(&a.0[i], &b.0[i], choice);
-        }
-        BsslPoint(res)
+        let group = p256_group();
+        let bn_s = BnWrapper::from_bytes(&rhs.0);
+        let r = BsslPoint::new(group);
+        // r = NULL*gen + self*bn_s  (i.e. self * scalar)
+        // SAFETY: group, r, self, and bn_s are all valid pointers.
+        let rc = unsafe {
+            bssl_sys::EC_POINT_mul(
+                group,
+                r.as_mut_ptr(),
+                null(),
+                self.as_ptr(),
+                bn_s.as_ptr(),
+                /* ctx= */ null_mut(),
+            )
+        };
+        assert_eq!(rc, 1);
+        r
+        // bn_s freed automatically on drop.
     }
 }
 
 impl ConstantTimeEq for BsslPoint {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0.as_slice().ct_eq(other.0.as_slice())
+        let group = p256_group();
+        // SAFETY: group, self, and other are valid pointers on the same group.
+        // EC_POINT_cmp delegates to ec_GFp_simple_points_equal, which compares
+        // Jacobian coordinates in constant time and returns 0 for equality, 1 for inequality.
+        let rc = unsafe {
+            bssl_sys::EC_POINT_cmp(group, self.as_ptr(), other.as_ptr(), /* ctx= */ null_mut())
+        };
+        assert!(rc >= 0, "EC_POINT_cmp failed");
+        Choice::from((rc == 0) as u8)
     }
 }
+
+impl PartialEq for BsslPoint {
+    fn eq(&self, other: &Self) -> bool {
+        bool::from(self.ct_eq(other))
+    }
+}
+
+impl Eq for BsslPoint {}
 
 // ---------------------------------------------------------------------------
 // Public API functions
@@ -670,36 +719,42 @@ pub fn point_generator() -> BsslPoint {
     // is safe to call and returns a valid pointer owned by the group.
     let generator = unsafe { bssl_sys::EC_GROUP_get0_generator(group) };
     assert!(!generator.is_null());
-    // Use raw_to_bytes33 to serialize the borrowed pointer without copying.
-    BsslPoint(EcPointWrapper::raw_to_bytes33(generator))
+    let pt = BsslPoint::new(group);
+    // SAFETY: pt and generator are valid EC_POINT pointers on the same group.
+    let rc = unsafe { bssl_sys::EC_POINT_copy(pt.as_mut_ptr(), generator) };
+    assert_eq!(rc, 1, "EC_POINT_copy failed");
+    pt
 }
 
 /// Not constant-time, but operates only on untrusted public input.
 pub fn decode_point(input: &[u8]) -> (CtOption<BsslPoint>, &[u8]) {
-    if input.len() < 33 {
-        return (CtOption::new(BsslPoint([0u8; 33]), Choice::from(0u8)), input);
+    if input.len() < POINT_SIZE {
+        return (CtOption::new(BsslPoint::identity(), Choice::from(0u8)), input);
     }
-    let mut bytes = [0u8; 33];
-    bytes.copy_from_slice(&input[..33]);
+    let mut bytes = [0u8; POINT_SIZE];
+    bytes.copy_from_slice(&input[..POINT_SIZE]);
 
-    if bytes == [0u8; 33] {
-        return (CtOption::new(BsslPoint(bytes), Choice::from(1u8)), &input[33..]);
+    if bytes == [0u8; POINT_SIZE] {
+        return (CtOption::new(BsslPoint::identity(), Choice::from(1u8)), &input[POINT_SIZE..]);
     }
 
     let group = p256_group();
-    let pt = EcPointWrapper::new(group);
+    let pt = BsslPoint::new(group);
     // SAFETY: group and pt are valid pointers, bytes points to a 33-byte buffer.
     let r = unsafe {
-        bssl_sys::EC_POINT_oct2point(group, pt.as_mut_ptr(), bytes.as_ptr(), 33, null_mut())
+        bssl_sys::EC_POINT_oct2point(group, pt.as_mut_ptr(), bytes.as_ptr(), POINT_SIZE, null_mut())
     };
     if r != 1 {
-        // If oct2point fails, it leaves errors on the queue. Clear them.
-        unsafe { bssl_sys::ERR_clear_error() };
+        // If oct2point fails, it leaves errors on the queue. Clear them and reset pt to identity.
+        let rc = unsafe {
+            bssl_sys::ERR_clear_error();
+            bssl_sys::EC_POINT_set_to_infinity(group, pt.as_mut_ptr())
+        };
+        assert_eq!(rc, 1);
     }
-    // pt freed automatically on drop.
 
     let valid = Choice::from((r == 1) as u8);
-    (CtOption::new(BsslPoint(bytes), valid), &input[33..])
+    (CtOption::new(pt, valid), &input[POINT_SIZE..])
 }
 
 /// P-256 group order in big-endian, lazily initialized from BoringSSL.
@@ -723,20 +778,23 @@ pub fn decode_scalar(input: &[u8]) -> (CtOption<BsslScalar>, &[u8]) {
 }
 
 pub fn encode_point(point: &BsslPoint, out: &mut Vec<u8>) {
-    out.extend_from_slice(&point.0);
+    out.extend_from_slice(&point.to_bytes33());
 }
 
 pub fn encode_scalar(scalar: &BsslScalar, out: &mut Vec<u8>) {
     out.extend_from_slice(&scalar.0);
 }
 
+/// Hash to a curve point using the RFC 9380 SSWU map.
+///
+/// Constant-time in the *contents* of `msgs` and `dsts` (runtime depends only on input lengths).
 pub fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslPoint, &'static str> {
     // Concatenate msgs and dsts like the rustcrypto backend does.
     let msg_cat: Vec<u8> = msgs.iter().flat_map(|m| m.iter().copied()).collect();
     let dst_cat: Vec<u8> = dsts.iter().flat_map(|d| d.iter().copied()).collect();
 
     let group = p256_group();
-    let pt = EcPointWrapper::new(group);
+    let pt = BsslPoint::new(group);
     // SAFETY: group and pt are valid pointers. dst_cat and msg_cat slices
     // provide valid pointers and lengths to byte buffers.
     let rc = unsafe {
@@ -752,10 +810,13 @@ pub fn hash_to_point(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslPoint, &'stat
     if rc != 1 {
         return Err("hash_to_curve failed");
     }
-    Ok(BsslPoint(pt.to_bytes33()))
-    // pt freed automatically on drop.
+    Ok(pt)
 }
 
+/// Hash to a scalar mod the P-256 order (RFC 9380 §5).
+///
+/// **Inputs must be public** (e.g. Fiat-Shamir transcripts): reduction uses `BN_nnmod` (`BN_div`),
+/// which is not constant-time and produces a variable-width `BIGNUM`.
 pub fn hash_to_scalar(msgs: &[&[u8]], dsts: &[&[u8]]) -> Result<BsslScalar, &'static str> {
     // Implement hash-to-scalar per RFC 9380 §5:
     // 1. Concatenate messages and DSTs
@@ -808,7 +869,8 @@ impl Sha256 {
 
     fn finalize(mut self) -> [u8; 32] {
         let mut out = [0u8; 32];
-        // SAFETY: `out` has SHA256_DIGEST_LENGTH (=32) bytes and `self.0` is a valid initialized SHA256_CTX.
+        // SAFETY: `out` has SHA256_DIGEST_LENGTH (=32) bytes and `self.0` is a valid initialized
+        // SHA256_CTX.
         let r = unsafe { bssl_sys::SHA256_Final(out.as_mut_ptr(), &mut self.0) };
         assert_eq!(r, 1);
         out
@@ -864,6 +926,8 @@ fn expand_message_xmd_sha256(
     Ok(uniform_bytes)
 }
 
+/// Sample a uniformly random scalar in `[0, order)` (may return zero; see
+/// `random_non_zero_scalar`).
 pub fn random_scalar() -> BsslScalar {
     // Use BoringSSL's built-in CSPRNG.
     let order = p256_order();
@@ -875,6 +939,7 @@ pub fn random_scalar() -> BsslScalar {
     // bn freed automatically on drop.
 }
 
+/// Sample a uniformly random scalar in `[1, order)`.
 pub fn random_non_zero_scalar() -> BsslScalar {
     loop {
         let s = random_scalar();
@@ -916,7 +981,7 @@ impl AthmBackend for BoringSslBackend {
     }
 
     fn point_identity() -> Self::Point {
-        BsslPoint::IDENTITY
+        BsslPoint::identity()
     }
 
     fn point_generator() -> Self::Point {
@@ -1059,12 +1124,10 @@ mod tests {
     #[test]
     fn test_point_scalar_mul_identity() {
         let g = point_generator();
-        let _zero = BsslScalar::ZERO;
-        // G * 0 should be identity (but encoded as compressed point).
-        // BoringSSL returns point at infinity -> serialization is 0x00.
-        // Actually EC_POINT_mul with zero scalar gives infinity which
-        // can't be compressed normally. Let's test G * 1 = G instead.
-        let g1 = g * BsslScalar::ONE;
+        let g0 = &g * BsslScalar::ZERO;
+        assert!(bool::from(g0.is_identity()));
+        assert!(bool::from(g0.ct_eq(&BsslPoint::identity())));
+        let g1 = &g * BsslScalar::ONE;
         assert!(bool::from(g1.ct_eq(&g)));
     }
 
@@ -1072,11 +1135,11 @@ mod tests {
     fn test_point_add_sub() {
         let g = point_generator();
         let two = BsslScalar::from(2u64);
-        let g2 = g * two;
-        let g_plus_g = g + g;
+        let g2 = &g * two;
+        let g_plus_g = &g + &g;
         assert!(bool::from(g2.ct_eq(&g_plus_g)));
 
-        let back = g2 - g;
+        let back = &g2 - &g;
         assert!(bool::from(back.ct_eq(&g)));
     }
 

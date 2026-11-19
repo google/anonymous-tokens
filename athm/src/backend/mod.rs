@@ -36,6 +36,12 @@ pub mod boringssl;
 #[cfg(all(test, feature = "rustcrypto", feature = "boringssl"))]
 mod cross_backend_test;
 
+// Timing tests are slow and sensitive to machine load, so they are gated behind
+// their own feature and built as separate targets rather than running as part
+// of the ordinary suite.
+#[cfg(all(test, feature = "timing-tests"))]
+mod timing_test;
+
 /// Trait abstracting the elliptic curve backend for the ATHM protocol.
 ///
 /// Implementors provide P-256 scalar and point types along with all
@@ -62,19 +68,24 @@ pub trait AthmBackend: 'static + Sized {
         + ConditionallySelectable;
 
     /// Point type (element of the P-256 curve group).
-    type Point: Copy
-        + Clone
+    ///
+    /// `Point` deliberately does not require `ConditionallySelectable`:
+    /// backends may hold opaque owned handles (e.g. `EC_POINT`). Protocol code
+    /// must avoid constructions that need constant-time point selection.
+    type Point: Clone
         + fmt::Debug
         + Default
         + PartialEq
         + Eq
         + Zeroize
         + Add<Output = Self::Point>
+        + for<'a> Add<&'a Self::Point, Output = Self::Point>
         + Sub<Output = Self::Point>
+        + for<'a> Sub<&'a Self::Point, Output = Self::Point>
         + Neg<Output = Self::Point>
         + Mul<Self::Scalar, Output = Self::Point>
-        + ConstantTimeEq
-        + ConditionallySelectable;
+        + for<'a> Mul<&'a Self::Scalar, Output = Self::Point>
+        + ConstantTimeEq;
 
     /// Size of a serialized scalar in bytes.
     const SCALAR_SIZE: usize;
