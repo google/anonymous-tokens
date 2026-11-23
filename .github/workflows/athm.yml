@@ -23,6 +23,8 @@ jobs:
       run: cargo build --verbose --all-targets --features=test-vectors
     - name: Run tests
       run: cargo test --verbose
+    - name: Build timing tests
+      run: cargo test --lib --no-run --verbose --features=timing-tests
     - name: Check test vectors
       run: cargo run --features=test-vectors --bin check-test-vectors test_vectors.json
 
@@ -50,3 +52,5 @@ jobs:
       run: cargo test --verbose --features=boringssl
     - name: Run cross-backend tests
       run: cargo test --verbose --features=boringssl,rustcrypto
+    - name: Build BoringSSL timing tests
+      run: cargo test --lib --no-run --verbose --no-default-features --features=boringssl,timing-tests
